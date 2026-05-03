@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lenta-scraper"
+version = "0.1.0"
+description = "Скрапер каталога lenta.com в MySQL (Yandex Cloud)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx[http2]>=0.27",
+    "tenacity>=8.2",
+    "aiolimiter>=1.1",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncmy>=0.2.9",
+    "alembic>=1.13",
+    "typer>=0.12",
+    "structlog>=24.1",
+    "selectolax>=0.3.21",
+    "tqdm>=4.66",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+recon = ["playwright>=1.42"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "aiosqlite>=0.20"]
+
+[project.scripts]
+lenta-scrape = "lenta_scraper.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lenta_scraper"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

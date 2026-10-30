@@ -49,8 +49,15 @@ async def run_recon(city: str = "moscow", headless: bool = False) -> Path:
 
     captured: list[dict[str, Any]] = []
 
+    from .config import get_settings as _gs
+
+    proxy_url = _gs().proxy_url
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
+        launch_kwargs: dict = {"headless": headless}
+        if proxy_url:
+            launch_kwargs["proxy"] = {"server": proxy_url}
+        browser = await p.chromium.launch(**launch_kwargs)
         context = await browser.new_context(
             record_har_path=str(har_path),
             record_har_content="omit",

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         default="11111111-1111-1111-1111-111111111111", alias="DEVICE_ID"
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    proxy_url: str | None = Field(default=None, alias="PROXY_URL")
+    user_agent: str | None = Field(default=None, alias="USER_AGENT")
 
     @property
     def base_url(self) -> str:

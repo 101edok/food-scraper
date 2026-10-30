@@ -6,12 +6,29 @@ import sys
 import structlog
 
 
+class _DropAsyncmyResetOnClose(logging.Filter):
+    """Глушит шум 'Exception closing connection … ConnectionResetError' из пула.
+
+    Yandex Cloud Managed MySQL не отвечает на COM_QUIT, asyncmy ловит
+    ConnectionResetError при чтении ACK. К работе пайплайна не относится —
+    соединение уже закрыто, а exc_info портит вывод.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info:
+            exc = record.exc_info[1]
+            if isinstance(exc, ConnectionResetError):
+                return False
+        return True
+
+
 def configure_logging(level: str = "INFO") -> None:
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stderr,
         level=getattr(logging, level.upper(), logging.INFO),
     )
+    logging.getLogger("sqlalchemy.pool").addFilter(_DropAsyncmyResetOnClose())
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

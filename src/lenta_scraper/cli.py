@@ -4,7 +4,7 @@ import asyncio
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path  # noqa: F401  (используется в типах команд)
 from typing import Optional
 
 import structlog
@@ -32,6 +32,89 @@ def _root(
     configure_logging(log_level or s.log_level)
 
 
+@app.command(
+    "import-session",
+    help=(
+        "Импортировать cURL из DevTools. "
+        "Сам определяет тип: навигационный → cookies в browser_session.json, "
+        "XHR к /api-gateway/* → шаблон body в endpoints.json. "
+        "Можно подать несколько cURL'ов — для покрытия и сессии, и API-вызовов."
+    ),
+)
+def import_session(
+    file: Optional[Path] = typer.Option(
+        None,
+        "--file",
+        "-f",
+        help="Путь к файлу с cURL-командой. Если не задан — читаем stdin.",
+    ),
+) -> None:
+    if file is not None:
+        text = file.read_text(encoding="utf-8")
+    else:
+        if sys.stdin.isatty():
+            typer.echo(
+                "Передай cURL через pipe или --file. Например:\n"
+                "  pbpaste | lenta-scrape import-session\n"
+                "  lenta-scrape import-session -f request.curl",
+                err=True,
+            )
+            raise typer.Exit(2)
+        text = sys.stdin.read()
+    _process_curl(text)
+
+
+def _process_curl(text: str) -> None:
+    from .browser_session import (
+        ENDPOINTS_FILE,
+        SESSION_FILE,
+        is_api_endpoint,
+        parse_curl,
+        save_api_endpoint,
+        save_browser_session,
+    )
+
+    try:
+        parsed = parse_curl(text)
+    except ValueError as e:
+        typer.echo(f"FAIL: {e}", err=True)
+        raise typer.Exit(1)
+
+    if is_api_endpoint(parsed):
+        key, _ = save_api_endpoint(parsed)
+        rel = ENDPOINTS_FILE.relative_to(PROJECT_ROOT)
+        typer.echo(
+            f"→ API-шаблон сохранён: {key}  ({'с body' if parsed.body else 'без body'})  "
+            f"в {rel}"
+        )
+        # На XHR обычно тоже едут cookies — попробуем подхватить и сессию.
+        if parsed.cookies:
+            from .browser_session import BrowserSession
+
+            existing = BrowserSession.load() or BrowserSession()
+            existing.cookies.update(parsed.cookies)
+            existing.save()
+            typer.echo(
+                f"  +cookies в сессии: {len(parsed.cookies)} → итого {len(existing.cookies)}"
+            )
+        return
+
+    # Иначе — это навигационный cURL, сохраняем как сессию.
+    try:
+        sess = save_browser_session(parsed)
+    except ValueError as e:
+        typer.echo(f"FAIL: {e}", err=True)
+        raise typer.Exit(1)
+    ua = next(
+        (v for k, v in sess.headers.items() if k.lower() == "user-agent"), "(нет)"
+    )
+    typer.echo(
+        f"→ Сессия сохранена в {SESSION_FILE.relative_to(PROJECT_ROOT)}\n"
+        f"  cookies: {len(sess.cookies)} (qrator_jsid={'есть' if 'qrator_jsid' in sess.cookies else 'НЕТ'})\n"
+        f"  user-agent: {ua[:80]}"
+    )
+
+
 @app.command(help="Однократная разведка эндпоинтов через Playwright.")
 def recon(
     city: str = typer.Option(None, help="Поддомен города. По умолчанию — из .env"),
@@ -53,6 +136,76 @@ def init_db() -> None:
     raise typer.Exit(proc.returncode)
 
 
+@app.command("db-check", help="Проверить подключение к БД (SELECT 1) и список таблиц.")
+def db_check() -> None:
+    asyncio.run(_db_check_async())
+
+
+async def _db_check_async() -> None:
+    from sqlalchemy import text
+
+    from .db import get_engine
+
+    engine = get_engine()
+    s = get_settings()
+    typer.echo(f"DSN: {s.mysql_dsn.split('@', 1)[-1]}")
+    try:
+        async with engine.connect() as conn:
+            v = (await conn.execute(text("SELECT VERSION()"))).scalar()
+            typer.echo(f"OK: connected, MySQL {v}")
+            tables = (
+                await conn.execute(text("SHOW TABLES"))
+            ).scalars().all()
+            typer.echo(
+                f"Tables ({len(tables)}): {', '.join(tables) if tables else '(пусто — запусти init-db)'}"
+            )
+    except Exception as e:
+        typer.echo(f"FAIL: {type(e).__name__}: {e}", err=True)
+        raise typer.Exit(1)
+    finally:
+        await engine.dispose()
+
+
+def _read_clipboard() -> str | None:
+    """Прочитать буфер обмена через pbpaste/wl-paste/xclip — что найдётся."""
+    candidates = (
+        ["pbpaste"],
+        ["wl-paste", "--no-newline"],
+        ["xclip", "-selection", "clipboard", "-o"],
+    )
+    for cmd in candidates:
+        try:
+            r = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=2, check=False
+            )
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+        if r.returncode == 0 and r.stdout and r.stdout.strip():
+            return r.stdout
+    return None
+
+
+def _refresh_browser_session() -> None:
+    """Подхватить cURL из буфера или попросить вставить — и сохранить сессию/API."""
+    text = _read_clipboard()
+    if text and "curl" in text[:50].lower():
+        typer.echo("→ Подхватил cURL из буфера обмена.")
+    else:
+        if not sys.stdin.isatty():
+            typer.echo(
+                "FAIL: --refresh-session требует tty или непустой буфер обмена с cURL.",
+                err=True,
+            )
+            raise typer.Exit(2)
+        typer.echo(
+            "Вставь cURL из DevTools (Network → Copy → Copy as cURL) и нажми Ctrl-D:"
+        )
+        text = sys.stdin.read()
+    _process_curl(text)
+
+
 @app.command(help="Полный/частичный прогон скрапинга.")
 def run(
     category_id: Optional[int] = typer.Option(
@@ -65,7 +218,15 @@ def run(
         False, "--skip-categories-sync", help="Не обновлять справочник категорий"
     ),
     workers: int = typer.Option(8, help="Параллелизм запросов карточек"),
+    refresh_session: bool = typer.Option(
+        False,
+        "--refresh-session",
+        "-R",
+        help="Перед прогоном подхватить свежий cURL из буфера обмена (или вставить вручную).",
+    ),
 ) -> None:
+    if refresh_session:
+        _refresh_browser_session()
     asyncio.run(
         _run_async(
             category_id=category_id,
@@ -137,6 +298,52 @@ async def _run_async(
                 row.status = status
 
     log.info("done", products=products_total, errors=errors_total)
+
+
+@app.command(
+    help="Сетевая диагностика: внешний IP + что отвечает Лента через текущий PROXY_URL/UA."
+)
+def probe() -> None:
+    asyncio.run(_probe_async())
+
+
+async def _probe_async() -> None:
+    import httpx
+
+    s = get_settings()
+    typer.echo(f"PROXY_URL = {s.proxy_url or '(пусто)'}")
+    typer.echo(f"USER_AGENT = {s.user_agent or '(default)'}")
+
+    headers = {"User-Agent": s.user_agent or "Mozilla/5.0"}
+    targets = [
+        ("ipify (видимый IP)", "https://api.ipify.org?format=json"),
+        ("lenta.com home", f"https://{s.city_subdomain}.lenta.com/"),
+        (
+            "lenta catalog page",
+            f"https://{s.city_subdomain}.lenta.com/catalog/molochnye-produkty-syr-yaytsa-3009/",
+        ),
+    ]
+    async with httpx.AsyncClient(
+        proxy=s.proxy_url,
+        timeout=httpx.Timeout(15.0, connect=10.0),
+        headers=headers,
+        follow_redirects=False,
+    ) as c:
+        for label, url in targets:
+            try:
+                r = await c.get(url)
+                marker = ""
+                if "ipify" in url:
+                    marker = f"  body={r.text.strip()[:80]}"
+                elif r.status_code in (401, 403):
+                    body_low = r.text[:300].lower()
+                    if "qrator" in body_low or "qauth" in body_low:
+                        marker = "  ← Qrator JS-challenge (норма, решит warm-up)"
+                    elif "forbidden" in body_low:
+                        marker = "  ← edge-блок (IP/гео/файрвол)"
+                typer.echo(f"  {label}: HTTP {r.status_code}{marker}")
+            except httpx.HTTPError as e:
+                typer.echo(f"  {label}: FAIL {type(e).__name__}: {e}")
 
 
 @app.command(help="Краткий отчёт по последним прогонам.")

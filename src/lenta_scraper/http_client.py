@@ -13,7 +13,9 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from .browser_session import BrowserSession
 from .config import Settings, get_settings
+from .qrator import QratorWarmer
 
 log = structlog.get_logger(__name__)
 
@@ -22,8 +24,8 @@ DEFAULT_UA = (
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 
-
 RETRYABLE_STATUSES = frozenset({408, 425, 429, 500, 502, 503, 504})
+QRATOR_REFRESH_STATUSES = frozenset({401, 403})
 
 
 class RetryableHTTPStatus(Exception):
@@ -33,7 +35,14 @@ class RetryableHTTPStatus(Exception):
 
 
 class LentaHttpClient:
-    """Тонкая обёртка над httpx.AsyncClient: общие заголовки, ретраи, rate-limit."""
+    """Тонкая обёртка над httpx.AsyncClient.
+
+    Особенности:
+      * Общие заголовки + Qrator cookies (warm-up через Playwright headless).
+      * Ретраи на 5xx/429 (tenacity).
+      * Один автоматический refresh Qrator-сессии при 401/403.
+      * Глобальный rate-limit (aiolimiter).
+    """
 
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -43,11 +52,46 @@ class LentaHttpClient:
             http2=True,
             timeout=httpx.Timeout(30.0, connect=10.0),
             headers=self._base_headers(),
+            proxy=(settings.proxy_url or None),
+            follow_redirects=True,
         )
+        self._qrator = QratorWarmer(
+            settings.base_url, settings.proxy_url, settings.user_agent
+        )
+        self._browser_session = BrowserSession.load()
+        # Если есть импортированная браузерная сессия — берём её, Playwright не нужен.
+        self._qrator_initialized = self._browser_session is not None
+        if self._browser_session:
+            self._apply_browser_session(self._browser_session)
+            log.info(
+                "browser_session_loaded",
+                cookies=len(self._browser_session.cookies),
+                headers=len(self._browser_session.headers),
+            )
+
+    # Хедеры из cURL'а навигации (Document) бессмысленно тащить в XHR/JSON-запросы:
+    # accept: text/html, sec-fetch-mode: navigate, upgrade-insecure-requests, priority…
+    # Берём только то, что должно быть одинаково в любом запросе от того же браузера.
+    _BROWSER_HEADERS_WHITELIST = frozenset(
+        {
+            "user-agent",
+            "accept-language",
+            "sec-ch-ua",
+            "sec-ch-ua-mobile",
+            "sec-ch-ua-platform",
+        }
+    )
+
+    def _apply_browser_session(self, sess: BrowserSession) -> None:
+        for name, value in sess.cookies.items():
+            self._client.cookies.set(name, value, domain=".lenta.com")
+        for name, value in sess.headers.items():
+            if name.lower() in self._BROWSER_HEADERS_WHITELIST:
+                self._client.headers[name] = value
 
     def _base_headers(self) -> dict[str, str]:
         return {
-            "User-Agent": DEFAULT_UA,
+            "User-Agent": self.settings.user_agent or DEFAULT_UA,
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "ru,en;q=0.9",
             "X-Domain": self.settings.x_domain,
@@ -58,11 +102,23 @@ class LentaHttpClient:
             "Deviceid": self.settings.device_id,
             "Client": "web",
             "Origin": self.settings.base_url,
-            "Referer": f"{self.settings.base_url}/",
+            "Referer": f"{self.settings.base_url}/catalog/",
+            # XHR fetch metadata (как в Chrome/YaBrowser):
+            "Sec-Fetch-Site": "same-origin",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Dest": "empty",
         }
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    async def _apply_qrator(self, *, force_refresh: bool = False) -> None:
+        sess = await self._qrator.get_session(force_refresh=force_refresh)
+        for name, value in sess.cookies.items():
+            self._client.cookies.set(name, value, domain=".lenta.com")
+        # User-Agent должен совпадать с тем, под которым решали challenge.
+        self._client.headers["User-Agent"] = sess.user_agent
+        self._qrator_initialized = True
 
     async def request(
         self,
@@ -73,6 +129,9 @@ class LentaHttpClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> httpx.Response:
+        if not self._qrator_initialized:
+            await self._apply_qrator()
+
         last_resp: httpx.Response | None = None
         try:
             async for attempt in AsyncRetrying(
@@ -97,7 +156,29 @@ class LentaHttpClient:
                         )
                         raise RetryableHTTPStatus(resp)
         except RetryableHTTPStatus as e:
-            return e.response
+            last_resp = e.response
+
+        # Qrator выкинул челлендж заново (TTL истёк / переподозрел).
+        if last_resp is not None and last_resp.status_code in QRATOR_REFRESH_STATUSES:
+            body_head = last_resp.text[:200] if last_resp.content else ""
+            if "qrator" in body_head.lower() or "qauth" in body_head.lower():
+                if self._browser_session is not None:
+                    log.error(
+                        "browser_session_expired",
+                        status=last_resp.status_code,
+                        hint="Открой сайт в браузере, скопируй свежий cURL и перезапусти "
+                        "`lenta-scrape import-session`.",
+                    )
+                else:
+                    log.warning(
+                        "qrator_challenge_repeat", status=last_resp.status_code
+                    )
+                    await self._apply_qrator(force_refresh=True)
+                    async with self._limiter:
+                        last_resp = await self._client.request(
+                            method, url, json=json, params=params, headers=headers
+                        )
+
         assert last_resp is not None
         return last_resp
 

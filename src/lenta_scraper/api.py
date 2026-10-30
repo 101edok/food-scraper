@@ -95,17 +95,29 @@ def _load_recon_overrides() -> dict[str, Any]:
         return {}
 
 
-def _list_body_template() -> dict[str, Any]:
+def _list_template() -> tuple[dict[str, Any], dict[str, str]]:
+    """Возвращает (body_template, extra_headers) для запроса листинга."""
     overrides = _load_recon_overrides()
     key_candidates = (f"POST {LIST_PATH}", f"POST {LIST_PATH}/")
     for k in key_candidates:
         ep = overrides.get(k)
-        if ep and ep.get("request_body"):
+        if not ep:
+            continue
+        body: dict[str, Any] = DEFAULT_LIST_BODY.copy()
+        if ep.get("request_body"):
             try:
-                return json.loads(ep["request_body"])
+                body = json.loads(ep["request_body"])
             except Exception:
                 pass
-    return DEFAULT_LIST_BODY.copy()
+        # Из реальных headers берём только то, что Qrator/бэкенд могут проверять
+        # помимо общих X-*/cookies (которые уже в сессии).
+        headers: dict[str, str] = {}
+        for name, val in (ep.get("request_headers") or {}).items():
+            low = name.lower()
+            if low in {"referer", "origin", "x-csrf-token", "x-xsrf-token"}:
+                headers[name] = val
+        return body, headers
+    return DEFAULT_LIST_BODY.copy(), {}
 
 
 # ---------------------------------------------------------------------------- #
@@ -223,12 +235,17 @@ async def iter_category_items(
     client: LentaHttpClient, category_id: int, *, page_size: int = 24
 ) -> AsyncIterator[ProductSummary]:
     """Пагинация по категории: возвращает поток ProductSummary."""
-    body_template = _list_body_template()
+    body_template, extra_headers = _list_template()
     offset = 0
     seen = 0
     while True:
-        body = {**body_template, "categoryId": category_id, "offset": offset, "limit": page_size}
-        resp = await client.post(LIST_PATH, json=body)
+        body = {
+            **body_template,
+            "categoryId": category_id,
+            "offset": offset,
+            "limit": page_size,
+        }
+        resp = await client.post(LIST_PATH, json=body, headers=extra_headers or None)
         if resp.status_code >= 400:
             log.warning(
                 "listing_error",

@@ -8,3 +8,5 @@ build/
 .pytest_cache/
 recon/har.json
 recon/*.log
+recon/browser_session.json
+recon/sample_request.curl

@@ -9,13 +9,15 @@ description = "Скрапер каталога lenta.com в MySQL (Yandex Cloud)
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx[http2]>=0.27",
+    "httpx[http2,socks]>=0.27",
     "tenacity>=8.2",
     "aiolimiter>=1.1",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "sqlalchemy[asyncio]>=2.0",
     "asyncmy>=0.2.9",
+    "pymysql>=1.1",
+    "cryptography>=42",
     "alembic>=1.13",
     "typer>=0.12",
     "structlog>=24.1",

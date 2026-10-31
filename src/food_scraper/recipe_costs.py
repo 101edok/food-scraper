@@ -52,6 +52,7 @@ class Line:
     product_id: str | None = None
     product_name: str | None = None
     unit_price_minor: float | None = None
+    price_unit: str | None = None  # единица unit_price_minor: g (масса/объём) или pcs — не всегда совпадает с unit
     cost_minor: int | None = None
     priced: bool = False
     reason: str | None = None
@@ -91,23 +92,23 @@ def estimate_recipe(
         elif "зубч" in (quantity_text or "").lower():
             grams = q.amount * CLOVE_G
         if q.unit == PCS and price.per_piece is not None and grams is None:
-            line.unit_price_minor, cost = price.per_piece, q.amount * price.per_piece
+            line.unit_price_minor, line.price_unit, cost = price.per_piece, PCS, q.amount * price.per_piece
         elif grams is None:
             # Штуки в рецепте, товар на вес — нужен вес штуки
             weight = next((w for s, w in PIECE_WEIGHT_G.items() if s in stems(name)), None)
             if weight is None or price.per_mass is None:
                 line.reason = "в рецепте штуки, товар на вес — вес штуки неизвестен"
                 continue
-            line.unit_price_minor, cost = price.per_mass, q.amount * weight * price.per_mass
+            line.unit_price_minor, line.price_unit, cost = price.per_mass, GRAM, q.amount * weight * price.per_mass
         elif price.per_mass is not None:
-            line.unit_price_minor, cost = price.per_mass, grams * price.per_mass
+            line.unit_price_minor, line.price_unit, cost = price.per_mass, q.unit, grams * price.per_mass
         else:
             # Граммы в рецепте, товар штучный (яйца десятком) — через вес штуки
             weight = next((w for s, w in PIECE_WEIGHT_G.items() if s in stems(name)), None)
             if weight is None:
                 line.reason = "в рецепте граммы, товар штучный — вес штуки неизвестен"
                 continue
-            line.unit_price_minor, cost = price.per_piece, grams / weight * price.per_piece
+            line.unit_price_minor, line.price_unit, cost = price.per_piece, PCS, grams / weight * price.per_piece
         line.cost_minor, line.priced = round(cost), True
         est.cost_minor += line.cost_minor
         est.priced += 1
@@ -209,5 +210,5 @@ def line_dict(line: Line) -> dict:
         "amount": line.amount, "unit": line.unit, "product_id": line.product_id,
         "product_name": line.product_name,
         "unit_price_minor": round(line.unit_price_minor, 4) if line.unit_price_minor is not None else None,
-        "cost_minor": line.cost_minor, "priced": line.priced, "reason": line.reason,
+        "price_unit": line.price_unit, "cost_minor": line.cost_minor, "priced": line.priced, "reason": line.reason,
     }

@@ -40,6 +40,24 @@ def outliers(rows: list[tuple[str, str | None, str, float, str]]) -> list[tuple[
     return found
 
 
+UNIT_LABELS = {"g": (1000, "кг"), "ml": (1000, "л"), "pcs": (1, "шт")}
+
+
+def rub(minor: float) -> str:
+    return f"{minor / 100:,.2f}".replace(",", " ").replace(".", ",") + " ₽"
+
+
+def outlier_message(price: float, median: float, unit: str) -> str:
+    """«Цена за кг в 14 раз ниже, чем обычно в категории: 47,50 ₽/кг против 664,80 ₽/кг»."""
+    per, label = UNIT_LABELS.get(unit, (1, unit))
+    ratio = price / median
+    times = round(ratio if ratio >= 1 else 1 / ratio)
+    word = "раза" if times % 10 in (2, 3, 4) and times % 100 not in (12, 13, 14) else "раз"
+    direction = f"в {times} {word} {'выше' if ratio >= 1 else 'ниже'}"
+    return (f"Цена за {label} {direction}, чем обычно в категории: {rub(price * per)}/{label} "
+            f"против {rub(median * per)}/{label}. Проверьте фасовку")
+
+
 async def check_all(now: datetime) -> dict[str, int]:
     issues: list[QualityIssue] = []
 
@@ -75,10 +93,9 @@ async def check_all(now: datetime) -> dict[str, int]:
             .where(Product.net_quantity > 0)
         )).all()
         unit_rows = [(shop, cat, pid, price / float(qty), unit) for shop, cat, pid, price, qty, unit in rows]
+        units = {(shop, pid): unit for shop, _, pid, _, unit in unit_rows}
         for shop, product_id, price, median in outliers(unit_rows):
-            issue(shop, "price_outlier", "warning",
-                  f"Цена за единицу в {price / median:.1f} раза от медианы категории "
-                  f"({price / 100:.4f} ₽ против {median / 100:.4f} ₽) — проверьте фасовку",
+            issue(shop, "price_outlier", "warning", outlier_message(price, median, units[(shop, product_id)]),
                   product_id=product_id)
 
         # Доля товаров без фасовки по сети

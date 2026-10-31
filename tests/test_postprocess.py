@@ -125,3 +125,10 @@ async def test_products_drop_alert(sqlite_db, sent):
                             stores_total=12, products_total=total))
     await alerts.on_run_finished(4)
     assert len(sent) == 1 and "меньше обычного" in sent[0]
+
+
+def test_outlier_message_is_readable():
+    from food_scraper.quality import outlier_message
+    assert outlier_message(4.75, 66.48, "g") == \
+        "Цена за кг в 14 раз ниже, чем обычно в категории: 47,50 ₽/кг против 664,80 ₽/кг. Проверьте фасовку"
+    assert "в 3 раза выше" in outlier_message(300, 100, "pcs")

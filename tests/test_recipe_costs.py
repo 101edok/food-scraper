@@ -34,3 +34,9 @@ def test_grams_of_piece_product_use_piece_weight():
     # 110 г яиц при цене 110 ₽ за 10 шт по 55 г: 2 яйца = 22 ₽
     est = estimate_recipe([(3, "Яйцо", "110 г")], PRICES)
     assert est.cost_minor == 2200
+
+
+def test_price_unit_follows_product_not_recipe():
+    # «1 штука» лука, лук продаётся на вес: цена в разбивке — за граммы, а не за штуку
+    line = estimate_recipe([(4, "Лук", "1 штука")], PRICES).lines[0]
+    assert (line.unit, line.price_unit) == ("pcs", "g")

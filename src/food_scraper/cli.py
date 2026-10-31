@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path  # noqa: F401  (используется в типах команд)
 from typing import Optional
 
@@ -11,14 +10,11 @@ import structlog
 import typer
 from sqlalchemy import desc, select
 
+from .cities import CITIES
 from .config import PROJECT_ROOT, get_settings
 from .db import session_scope
-from .http_client import http_client
 from .logging import configure_logging
 from .models import ScrapeRun
-from .pipeline.categories import sync_categories
-from .pipeline.details import fetch_many
-from .pipeline.listings import leaf_categories, stream_categories
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 log = structlog.get_logger(__name__)
@@ -34,6 +30,7 @@ def _root(
 
 @app.command(
     "import-session",
+    rich_help_panel="Лента",
     help=(
         "Импортировать cURL из DevTools. "
         "Сам определяет тип: навигационный → cookies в browser_session.json, "
@@ -55,8 +52,8 @@ def import_session(
         if sys.stdin.isatty():
             typer.echo(
                 "Передай cURL через pipe или --file. Например:\n"
-                "  pbpaste | lenta-scrape import-session\n"
-                "  lenta-scrape import-session -f request.curl",
+                "  pbpaste | food-scrape import-session\n"
+                "  food-scrape import-session -f request.curl",
                 err=True,
             )
             raise typer.Exit(2)
@@ -65,7 +62,7 @@ def import_session(
 
 
 def _process_curl(text: str) -> None:
-    from .browser_session import (
+    from .shops.lenta.browser_session import (
         ENDPOINTS_FILE,
         SESSION_FILE,
         is_api_endpoint,
@@ -89,7 +86,7 @@ def _process_curl(text: str) -> None:
         )
         # На XHR обычно тоже едут cookies — попробуем подхватить и сессию.
         if parsed.cookies:
-            from .browser_session import BrowserSession
+            from .shops.lenta.browser_session import BrowserSession
 
             existing = BrowserSession.load() or BrowserSession()
             existing.cookies.update(parsed.cookies)
@@ -115,12 +112,12 @@ def _process_curl(text: str) -> None:
     )
 
 
-@app.command(help="Однократная разведка эндпоинтов через Playwright.")
+@app.command(help="Лента: однократная разведка эндпоинтов через Playwright.", rich_help_panel="Лента")
 def recon(
     city: str = typer.Option(None, help="Поддомен города. По умолчанию — из .env"),
     headless: bool = typer.Option(False, help="Запустить браузер без UI"),
 ) -> None:
-    from .recon import run_recon
+    from .shops.lenta.recon import run_recon
 
     s = get_settings()
     asyncio.run(run_recon(city or s.city_subdomain, headless=headless))
@@ -154,7 +151,7 @@ async def _db_check_async() -> None:
             v = (await conn.execute(text("SELECT VERSION()"))).scalar()
             typer.echo(f"OK: connected, MySQL {v}")
             tables = (
-                await conn.execute(text("SHOW TABLES"))
+                await conn.execute(text("SHOW TABLES LIKE 'shop\\_%'"))
             ).scalars().all()
             typer.echo(
                 f"Tables ({len(tables)}): {', '.join(tables) if tables else '(пусто — запусти init-db)'}"
@@ -206,102 +203,52 @@ def _refresh_browser_session() -> None:
     _process_curl(text)
 
 
-@app.command(help="Полный/частичный прогон скрапинга.")
+@app.command(help="Прогон: один магазин × один город.")
 def run(
-    category_id: Optional[int] = typer.Option(
+    shop: str = typer.Option("magnit", "--shop", help="magnit | lenta"),
+    city: str = typer.Option("moscow", "--city", help=f"Город: {', '.join(CITIES)}"),
+    category_id: Optional[str] = typer.Option(
         None, "--category-id", help="Только эта категория (для smoke-теста)"
     ),
     limit: Optional[int] = typer.Option(
         None, "--limit", help="Максимум товаров на категорию"
     ),
-    skip_categories_sync: bool = typer.Option(
-        False, "--skip-categories-sync", help="Не обновлять справочник категорий"
+    workers: int = typer.Option(4, help="Параллельных запросов к магазину"),
+    details_max_age_days: int = typer.Option(
+        30, help="Перечитывать карточку (состав, КБЖУ), если ей больше N дней"
     ),
-    workers: int = typer.Option(8, help="Параллелизм запросов карточек"),
+    details_limit: Optional[int] = typer.Option(
+        None, help="Максимум карточек за прогон"
+    ),
     refresh_session: bool = typer.Option(
         False,
         "--refresh-session",
         "-R",
-        help="Перед прогоном подхватить свежий cURL из буфера обмена (или вставить вручную).",
+        help="Лента: перед прогоном подхватить свежий cURL из буфера обмена.",
     ),
 ) -> None:
+    from datetime import timedelta
+
+    from .pipeline.run import run as run_pipeline
+
     if refresh_session:
         _refresh_browser_session()
     asyncio.run(
-        _run_async(
+        run_pipeline(
+            shop,
+            city,
             category_id=category_id,
             limit=limit,
-            skip_categories_sync=skip_categories_sync,
             workers=workers,
+            details_max_age=timedelta(days=details_max_age_days),
+            details_limit=details_limit,
         )
     )
 
 
-async def _run_async(
-    *,
-    category_id: int | None,
-    limit: int | None,
-    skip_categories_sync: bool,
-    workers: int,
-) -> None:
-    s = get_settings()
-
-    async with session_scope() as session:
-        run_row = ScrapeRun(
-            city=s.city_subdomain,
-            delivery_mode=s.delivery_mode,
-            status="running",
-        )
-        session.add(run_row)
-        await session.flush()
-        run_id = run_row.id
-
-    products_total = errors_total = 0
-    status = "ok"
-
-    try:
-        async with http_client(s) as client:
-            if not skip_categories_sync:
-                await sync_categories(client)
-
-            cats = await leaf_categories(only_id=category_id)
-            if not cats:
-                log.warning("no_leaf_categories")
-            log.info("targets", categories=len(cats), workers=workers)
-
-            seen_pairs: list[tuple[int, int]] = []
-            async for cid, summary in stream_categories(
-                client, cats, limit=limit, workers=workers
-            ):
-                seen_pairs.append((summary.id, cid))
-                if len(seen_pairs) >= 200:
-                    ok, errs = await fetch_many(client, seen_pairs, workers=workers)
-                    products_total += ok
-                    errors_total += errs
-                    seen_pairs.clear()
-
-            if seen_pairs:
-                ok, errs = await fetch_many(client, seen_pairs, workers=workers)
-                products_total += ok
-                errors_total += errs
-    except Exception as e:
-        status = "failed"
-        log.exception("run_failed", err=str(e))
-        raise
-    finally:
-        async with session_scope() as session:
-            row = await session.get(ScrapeRun, run_id)
-            if row:
-                row.finished_at = datetime.now(timezone.utc).replace(microsecond=0)
-                row.products_total = products_total
-                row.errors_total = errors_total
-                row.status = status
-
-    log.info("done", products=products_total, errors=errors_total)
-
-
 @app.command(
-    help="Сетевая диагностика: внешний IP + что отвечает Лента через текущий PROXY_URL/UA."
+    help="Лента: сетевая диагностика — внешний IP и ответ Ленты через PROXY_URL.",
+    rich_help_panel="Лента",
 )
 def probe() -> None:
     asyncio.run(_probe_async())
@@ -363,8 +310,9 @@ async def _stats_async(n: int) -> None:
         return
     for r in rows:
         typer.echo(
-            f"#{r.id}  {r.started_at}  city={r.city}  {r.status}  "
-            f"products={r.products_total}  errors={r.errors_total}"
+            f"#{r.id}  {r.started_at}  {r.shop}/{r.city} store={r.store_code}  {r.status}  "
+            f"categories={r.categories_total} products={r.products_total} "
+            f"details={r.details_total} errors={r.errors_total}"
         )
 
 

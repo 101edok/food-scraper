@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from lenta_scraper.api import _parse_ng_state, _category_url
+from food_scraper.shops.lenta.api import _parse_ng_state, _category_url
 
 SAMPLE_HTML = (
     '<html><head>'

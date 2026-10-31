@@ -14,7 +14,7 @@ from tenacity import (
 )
 
 from .browser_session import BrowserSession
-from .config import Settings, get_settings
+from ...config import Settings, get_settings
 from .qrator import QratorWarmer
 
 log = structlog.get_logger(__name__)

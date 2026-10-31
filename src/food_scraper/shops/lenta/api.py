@@ -18,7 +18,7 @@ from typing import Any, AsyncIterator
 
 import structlog
 
-from .config import RECON_DIR, get_settings
+from ...config import RECON_DIR, get_settings
 from .http_client import LentaHttpClient
 
 log = structlog.get_logger(__name__)

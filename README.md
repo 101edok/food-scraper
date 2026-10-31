@@ -1,170 +1,128 @@
-# lenta-scraper
+# food-scraper
 
-Асинхронный скрапер каталога [lenta.com](https://lenta.com/) → MySQL (Yandex Cloud).
+Асинхронный скрейпер каталогов продуктовых магазинов → MySQL. Таблицы `shop_*` лежат
+в общей с edalle backend базе `recepter`.
 
-Подход: реверс внутреннего API через `httpx`. Категории читаются из SSR-данных
-страницы (`<script id="ng-state">`), товары и карточки — через
-`api-gateway/v1/catalog/items` и `…/catalog/items/<id>`. Идентификаторы магазина
-и заголовки запроса определяются однократным recon на Playwright.
+| Магазин | Статус | Как |
+|---|---|---|
+| Магнит | работает | BFF фронта `magnit.ru/webgate`, антибота нет — см. [recon/magnit.md](recon/magnit.md) |
+| Лента | нужен RU-резидентный прокси | реверс `api-gateway`, Qrator режет IP дата-центров (russia-03 и finland-01 — 403) |
+
+Один прогон — один магазин × один город. Цена всегда хранится вместе с городом
+(`shop_prices`, `shop_price_snapshots`): для города выбирается магазин сети, и его цены
+считаются ценами города; код магазина пишется рядом (`store_code`).
 
 ## Установка
 
 ```bash
-# Любой современный менеджер: uv / poetry / pip
-python3.11 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[recon,dev]"
-playwright install chromium     # только для recon
+playwright install chromium     # только для Ленты
 cp .env.example .env            # заполнить MYSQL_DSN
-```
-
-## Обход Qrator: импорт сессии браузера
-
-Лента сидит за Qrator + DataDome. Headless-Chromium и httpx они режут по
-TLS/JA-фингерпринту, но твой обычный браузер уже один раз прошёл challenge,
-и `qrator_jsid` живёт долго. Самый простой обход — пересадить сессию в скрапер.
-
-1. Открой `https://<город>.lenta.com/catalog/` в обычном браузере (Chrome/Yandex Browser).
-2. DevTools → Network → правый клик на запросе к `lenta.com` → **Copy → Copy as cURL (bash)**.
-3. Передай в скрапер:
-
-```bash
-pbpaste | lenta-scrape import-session                  # macOS
-xclip -o -selection clipboard | lenta-scrape import-session   # Linux X11
-lenta-scrape import-session -f request.curl            # из файла
-```
-
-Сохранится `recon/browser_session.json`. При следующем `lenta-scrape run`
-httpx подхватит cookies + headers и пойдёт как браузер. Playwright не нужен.
-
-Сессия живёт несколько часов. Если в логах увидишь `browser_session_expired`
-— открой страницу в браузере заново и повтори импорт.
-
-## Recon (выполняется один раз для города)
-
-```bash
-lenta-scrape recon --city moscow
-# → recon/endpoints.json (заголовки, body-шаблоны, store_id)
-# → recon/har.json       (полный сетевой трафик для отладки)
-```
-
-После recon при необходимости подправь `.env` (`DELIVERY_MODE`, и пр.).
-
-## Локальный MySQL для smoke-теста
-
-```bash
-docker run --name lenta-mysql -p 3306:3306 \
-  -e MYSQL_ROOT_PASSWORD=root \
-  -e MYSQL_DATABASE=lenta \
-  -e MYSQL_USER=lenta -e MYSQL_PASSWORD=lenta \
-  -d mysql:8
-
-lenta-scrape init-db
+food-scrape init-db             # alembic upgrade head → таблицы shop_*
 ```
 
 ## Прогон
 
 ```bash
-# smoke: одна категория, ограничение
-lenta-scrape run --category-id 3009 --limit 50
+# smoke: одна категория, 20 товаров, 5 карточек
+food-scrape run --shop magnit --city moscow --category-id 63983 --limit 20 --details-limit 5
 
 # полный
-lenta-scrape run
+food-scrape run --shop magnit --city moscow
 
 # отчёт
-lenta-scrape stats
+food-scrape stats
 ```
 
-## Прокси через VM в Yandex Cloud
+Что делает прогон:
 
-Если запускаешь скрапер не из РФ, Qrator (антибот Ленты) выдаёт 403 даже на
-headless-Chromium. Решение — пустить трафик через российскую VM. **Самый
-простой путь — SSH SOCKS5-туннель**, ничего на VM ставить не надо:
+1. Выбирает магазин сети рядом с центром города (`--city`, список — `src/food_scraper/cities.py`).
+2. Синхронизирует дерево категорий.
+3. Обходит листовые категории: товары и цены города. Цена пишется в `shop_prices`,
+   а в `shop_price_snapshots` — только если цена или наличие изменились.
+4. Дочитывает карточки (состав, КБЖУ, бренд, вес) только для новых товаров и тех,
+   чья карточка старше `--details-max-age-days` (30). Первый прогон по городу долгий,
+   следующие — в основном листинг.
 
-```bash
-ssh -D 1080 -N -f your-user@<vm-ip>     # фоновый туннель
-```
+## Новый магазин
 
-В `.env`:
-```
-PROXY_URL=socks5://127.0.0.1:1080
-```
-
-И `httpx`, и Playwright (qrator warm-up) уйдут через RU-IP.
-
-Альтернатива — `tinyproxy` на VM (HTTP CONNECT-прокси):
-```bash
-sudo apt install -y tinyproxy
-sudo tee /etc/tinyproxy/tinyproxy.conf >/dev/null <<EOF
-Port 8888
-Listen 0.0.0.0
-Allow <твой-IP>/32
-EOF
-sudo systemctl restart tinyproxy
-# открыть 8888 в Security Group YC только для своего IP
-```
-В `.env`:
-```
-PROXY_URL=http://<vm-ip>:8888
-```
-
-> **Не используй nginx как forward-proxy для HTTPS** — стандартная сборка
-> не поддерживает CONNECT, нужен пересобранный с `ngx_http_proxy_connect_module`.
-> tinyproxy / 3proxy / SSH-туннель проще и надёжнее.
-
-## Yandex Cloud MySQL
-
-1. Скачай [`root.crt`](https://yandex.cloud/ru/docs/managed-mysql/operations/connect#get-ssl-cert) в `~/.mysql/root.crt`.
-2. В `.env` поставь DSN:
-   ```
-   MYSQL_DSN=mysql+asyncmy://USER:PASS@HOST:3306/DB?ssl_ca=/Users/you/.mysql/root.crt
-   ```
-3. `lenta-scrape init-db && lenta-scrape run`.
+Адаптер в `src/food_scraper/shops/<name>.py` с контрактом `shops/base.py::Shop`:
+`select_store(city)`, `categories()`, `iter_items(category_id)`, `details(item_id)`.
+Пайплайн, запись в БД и CLI общие. Зарегистрировать в `shops/base.py::get_shop`.
 
 ## Деплой на russia-03
 
 Скрейпер живёт рядом с edalle backend: отдельный checkout в `~/food-scraper`,
-свой `.venv`, свой pm2-процесс `lenta-scraper` (`ecosystem.config.js`).
-Сервер в РФ, поэтому `PROXY_URL` там пустой, а Qrator проходится headless-прогревом
-Playwright — `recon/browser_session.json` на сервер не кладём.
+свой `.venv`, по pm2-процессу на магазин × город (`ecosystem.config.js`,
+например `food-scraper-magnit-moscow`).
 
 Первый раз:
 
 ```bash
 ssh russia-03
 git clone git@github.com:101edok/food-scraper.git ~/food-scraper && cd ~/food-scraper
-python3 -m venv .venv && .venv/bin/pip install -e ".[recon]"   # на сервере Python 3.12
-.venv/bin/playwright install --with-deps chromium
-cp .env.example .env            # MYSQL_DSN=…@public.mysql.gistrec.cloud…, PROXY_URL пустой
-.venv/bin/lenta-scrape db-check
-.venv/bin/lenta-scrape run --category-id 3009 --limit 50   # smoke
+python3 -m venv .venv && .venv/bin/pip install -e .    # на сервере Python 3.12
+cp .env.example .env            # MYSQL_DSN → recepter, учётка backend
+.venv/bin/food-scrape db-check && .venv/bin/food-scrape init-db
+.venv/bin/food-scrape run --shop magnit --city moscow --category-id 63983 --limit 20   # smoke
 pm2 start ecosystem.config.js && pm2 save
 ```
 
 Обновление:
 
 ```bash
-ssh russia-03 'cd food-scraper && git pull --ff-only && .venv/bin/pip install -e ".[recon]"'
-ssh russia-03 'pm2 restart lenta-scraper'   # внимание: restart сразу запускает прогон
+ssh russia-03 'cd food-scraper && git pull --ff-only && .venv/bin/pip install -e . && .venv/bin/food-scrape init-db'
+ssh russia-03 'pm2 startOrReload ecosystem.config.js && pm2 save'   # restart сразу запускает прогон
 ```
 
-Прогон каждый день в 04:00 по времени сервера. Логи: `pm2 logs lenta-scraper`,
-итоги: `lenta-scrape stats`.
+Прогоны по cron из `ecosystem.config.js` (время сервера). Логи:
+`pm2 logs food-scraper-magnit-moscow`, итоги: `food-scrape stats`.
+
+## Лента
+
+Лента сидит за Qrator. С IP дата-центров `__qrator/validate` отвечает 403 даже
+настоящему Chromium, так что на сервере нужен российский резидентный/мобильный
+прокси в `PROXY_URL`. Локально можно пересадить сессию своего браузера:
+
+1. Открой `https://<город>.lenta.com/catalog/` в обычном браузере.
+2. DevTools → Network → правый клик на запросе к `lenta.com` → **Copy → Copy as cURL (bash)**.
+3. `pbpaste | food-scrape import-session` — сохранится `recon/browser_session.json`
+   (cookies, в git не попадает). Сессия живёт несколько часов: на
+   `browser_session_expired` повтори импорт.
+
+Город Ленты задаётся поддоменом в `.env` (`CITY_SUBDOMAIN`), разведка
+эндпоинтов — `food-scrape recon --city moscow`, диагностика сети — `food-scrape probe`.
+
+Прокси через свою VM: `ssh -D 1080 -N -f user@<vm-ip>` и `PROXY_URL=socks5://127.0.0.1:1080`
+(или tinyproxy на VM; nginx как forward-proxy для HTTPS не подходит — нет CONNECT).
+
+## Yandex Cloud MySQL
+
+1. Скачай [`root.crt`](https://yandex.cloud/ru/docs/managed-mysql/operations/connect#get-ssl-cert) в `~/.mysql/root.crt`.
+2. В `.env`:
+   ```
+   MYSQL_DSN=mysql+asyncmy://USER:PASS@public.mysql.gistrec.cloud:3306/recepter?ssl_ca=/Users/you/.mysql/root.crt&ssl_check_hostname=false
+   ```
+
+alembic ведёт свою таблицу версий `shop_alembic_version` и видит только таблицы
+`shop_*` — таблицы backend он не трогает.
 
 ## Структура
 
 ```
-src/lenta_scraper/
+src/food_scraper/
   config.py           pydantic-settings из .env
-  http_client.py      httpx + tenacity + aiolimiter
-  api.py              типизированные обёртки над эндпоинтами
-  models.py           SQLAlchemy ORM
+  cities.py           города: slug, центр
+  models.py           SQLAlchemy ORM (shop_*)
   db.py               async engine/session
-  upsert.py           идемпотентный INSERT … ON DUPLICATE KEY UPDATE
-  recon.py            Playwright-разведка эндпоинтов
-  pipeline/
-    categories.py     обход дерева категорий
-    listings.py       пагинация по категории
-    details.py        карточки товаров
+  upsert.py           идемпотентная запись (MySQL / SQLite в тестах)
+  pipeline/run.py     прогон магазин × город
+  shops/
+    base.py           контракт адаптера + get_shop()
+    magnit.py         Магнит
+    lenta/            Лента: api, http_client, qrator, browser_session, recon
   cli.py              typer CLI
 alembic/              миграции
+recon/                заметки разведки
 ```

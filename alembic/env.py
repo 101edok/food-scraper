@@ -12,9 +12,9 @@ from alembic import context
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection
 
-from lenta_scraper.config import get_settings
-from lenta_scraper.db import _build_connect_args
-from lenta_scraper.models import Base
+from food_scraper.config import get_settings
+from food_scraper.db import _build_connect_args
+from food_scraper.models import Base
 
 config = context.config
 
@@ -30,6 +30,13 @@ def _to_sync_dsn(dsn: str) -> str:
 
 
 target_metadata = Base.metadata
+# БД общая с edalle backend (recepter) — держим свою таблицу версий.
+VERSION_TABLE = "shop_alembic_version"
+
+
+def _include_name(name, type_, parent_names) -> bool:
+    # Чужие таблицы (users, videos, …) не трогаем, иначе --autogenerate предложит их дропнуть.
+    return type_ != "table" or name.startswith("shop_")
 
 
 def run_migrations_offline() -> None:
@@ -38,13 +45,20 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        version_table=VERSION_TABLE,
+        include_name=_include_name,
     )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        version_table=VERSION_TABLE,
+        include_name=_include_name,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

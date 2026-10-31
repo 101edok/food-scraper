@@ -1,7 +1,7 @@
 """Юнит-тесты на чистый парсинг — без сети, без БД."""
 from __future__ import annotations
 
-from lenta_scraper.api import _normalize_listing, _to_minor, parse_details
+from food_scraper.shops.lenta.api import _normalize_listing, _to_minor, parse_details
 
 
 def test_to_minor_handles_floats_and_none():

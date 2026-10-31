@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "lenta-scraper"
+name = "food-scraper"
 version = "0.1.0"
-description = "Скрапер каталога lenta.com в MySQL (Yandex Cloud)"
+description = "Скрейпер каталогов продуктовых магазинов (Магнит, Лента) в MySQL"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -31,10 +31,10 @@ recon = ["playwright>=1.42"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "aiosqlite>=0.20"]
 
 [project.scripts]
-lenta-scrape = "lenta_scraper.cli:app"
+food-scrape = "food_scraper.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/lenta_scraper"]
+packages = ["src/food_scraper"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

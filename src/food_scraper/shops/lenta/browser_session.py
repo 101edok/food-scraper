@@ -12,7 +12,7 @@ import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import RECON_DIR
+from ...config import RECON_DIR
 
 SESSION_FILE = RECON_DIR / "browser_session.json"
 ENDPOINTS_FILE = RECON_DIR / "endpoints.json"

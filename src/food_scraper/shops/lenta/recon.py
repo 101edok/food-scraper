@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from .config import RECON_DIR
+from ...config import RECON_DIR
 
 log = structlog.get_logger(__name__)
 
@@ -49,7 +49,7 @@ async def run_recon(city: str = "moscow", headless: bool = False) -> Path:
 
     captured: list[dict[str, Any]] = []
 
-    from .config import get_settings as _gs
+    from ...config import get_settings as _gs
 
     proxy_url = _gs().proxy_url
 

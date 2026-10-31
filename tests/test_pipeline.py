@@ -144,14 +144,21 @@ async def test_history_only_on_change_and_registry_reused(sqlite_db, clock, shop
     assert await _count(PriceSnapshot, PriceSnapshot.store_code == "c", PriceSnapshot.product_id == "a") == 1
 
 
-async def test_refresh_deactivates_vanished_stores(sqlite_db, clock, shop):
+async def test_refresh_deactivates_only_long_vanished_stores(sqlite_db, clock, shop, monkeypatch):
     await run_mod.run("fake", "moscow", stores=None)
     shop.visible = {"c", "n"}
+
+    # Один пропущенный обход точку не выключает: поиск по координате у сетей нестабилен
+    await run_mod.run("fake", "moscow", stores=None, refresh_stores=True)
+    assert sorted(s.code for s in await _all(Store, Store.is_active.is_(True))) == ["c", "n", "s"]
+
+    # Через 15 дней без южной точки — выключаем
+    later = [datetime(2026, 11, 20, 12, 0)]
+    monkeypatch.setattr(run_mod, "utcnow", lambda: later[0])
     await run_mod.run("fake", "moscow", stores=None, refresh_stores=True)
 
-    active = sorted(s.code for s in await _all(Store, Store.is_active.is_(True)))
-    assert active == ["c", "n"]
-    last = (await _all(ScrapeRun, ScrapeRun.id == 2))[0]
+    assert sorted(s.code for s in await _all(Store, Store.is_active.is_(True))) == ["c", "n"]
+    last = (await _all(ScrapeRun, ScrapeRun.id == 3))[0]
     assert last.stores_total == 2
     # История южной точки остаётся
     assert await _count(Price, Price.store_code == "s") == 1

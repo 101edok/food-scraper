@@ -22,6 +22,9 @@ from .shops.base import CategoryRow, DetailsRow, ItemRow
 from .stores import StoreRow
 
 BATCH = 500
+# Поиск точек по координате у сетей нестабилен (у Магнита два обхода подряд — 123 и 124 точки):
+# точку выключаем, только если её не видно две недели.
+STORE_GONE_AFTER = timedelta(days=14)
 
 
 async def _upsert(
@@ -239,8 +242,8 @@ async def save_details(
 async def upsert_stores(
     session: AsyncSession, *, shop: str, city: str, stores: Sequence[StoreRow], now: datetime
 ) -> int:
-    """Справочник точек города. Те, что обход больше не нашёл, помечаем неактивными, но не удаляем:
-    на них ссылается история цен. Возвращает число деактивированных."""
+    """Справочник точек города. Те, что обход не находит дольше STORE_GONE_AFTER, помечаем неактивными,
+    но не удаляем: на них ссылается история цен. Возвращает число деактивированных."""
     if stores:
         await _upsert(
             session,
@@ -257,7 +260,12 @@ async def upsert_stores(
         )
     result = await session.execute(
         update(Store)
-        .where(Store.shop == shop, Store.city == city, Store.is_active.is_(True), Store.last_seen_at < now)
+        .where(
+            Store.shop == shop,
+            Store.city == city,
+            Store.is_active.is_(True),
+            Store.last_seen_at < now - STORE_GONE_AFTER,
+        )
         .values(is_active=False)
     )
     return result.rowcount or 0

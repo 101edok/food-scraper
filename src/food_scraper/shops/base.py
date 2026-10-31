@@ -18,6 +18,8 @@ class CategoryRow:
     is_adult: bool = False
     image_url: str | None = None
     url: str | None = None
+    # False — служебная «категория» обхода (поисковый запрос ВкусВилла): обходим, но в справочник не пишем
+    persist: bool = True
 
 
 @dataclass(slots=True)
@@ -38,6 +40,9 @@ class ItemRow:
     # Лист дерева, если магазин отдаёт его прямо в листинге (Дикси); иначе категорию даёт карточка
     category_id: str | None = None
     category_name: str | None = None
+    # Раздел над листом, если магазин отдаёт и его (ВкусВилл)
+    category_parent_id: str | None = None
+    category_parent_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -103,4 +108,8 @@ def get_shop(name: str) -> Shop:
         from .fixprice import FixPrice
 
         return FixPrice(s)
-    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, dixy, fixprice, lenta")
+    if name == "vkusvill":
+        from .vkusvill import VkusVill
+
+        return VkusVill(s)
+    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, dixy, fixprice, vkusvill, lenta")

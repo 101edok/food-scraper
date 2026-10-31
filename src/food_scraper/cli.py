@@ -205,7 +205,7 @@ def _refresh_browser_session() -> None:
 
 @app.command(help="Прогон: сеть магазинов × город, по нескольким точкам сети.")
 def run(
-    shop: str = typer.Option("magnit", "--shop", help="magnit | dixy | fixprice | lenta"),
+    shop: str = typer.Option("magnit", "--shop", help="magnit | dixy | fixprice | vkusvill | lenta"),
     city: str = typer.Option("moscow", "--city", help=f"Город: {', '.join(CITIES)}"),
     category_id: Optional[str] = typer.Option(
         None, "--category-id", help="Только эта категория (для smoke-теста)"
@@ -257,7 +257,7 @@ def run(
 
 @app.command("stores", help="Обновить справочник точек сети в городе (обход сеткой) и показать его.")
 def stores_cmd(
-    shop: str = typer.Option("magnit", "--shop", help="magnit | dixy | fixprice | lenta"),
+    shop: str = typer.Option("magnit", "--shop", help="magnit | dixy | fixprice | vkusvill | lenta"),
     city: str = typer.Option("moscow", "--city", help=f"Город: {', '.join(CITIES)}"),
     workers: int = typer.Option(4, help="Параллельных запросов к магазину"),
 ) -> None:

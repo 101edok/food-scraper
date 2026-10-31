@@ -8,7 +8,7 @@
 | Магнит | работает | BFF фронта `magnit.ru/webgate`, антибота нет — см. [recon/magnit.md](recon/magnit.md) |
 | Дикси | работает | PHP-ручки Битрикса `/ajax/*.php`, магазин в PHP-сессии, Qrator пропускает — см. [recon/dixy.md](recon/dixy.md) |
 | Fix Price | работает, только «Продукты и напитки» | API фронта `api.fix-price.com/buyer/v1`; цена по городу, не по точке — одна точка на город — см. [recon/fixprice.md](recon/fixprice.md) |
-| ВкусВилл | разведан, не подключён | выбор магазина блокируется после нескольких попыток с одного IP, пагинация и `/ajax/` закрыты в robots.txt — см. [recon/vkusvill.md](recon/vkusvill.md) |
+| ВкусВилл | работает, по поиску | официальный MCP-сервер `mcp.vkusvill.ru/mcp`: поиск по ингредиентам рецептов edalle и базовым продуктам, цена одна на город (без OAuth) — см. [recon/vkusvill.md](recon/vkusvill.md) |
 | Лента | нужен RU-резидентный прокси | реверс `api-gateway`, Qrator режет IP дата-центров (russia-03 и finland-01 — 403) |
 
 Один прогон — одна сеть × один город, по нескольким точкам сети. Цена хранится по
@@ -144,6 +144,7 @@ src/food_scraper/
     magnit.py         Магнит
     dixy.py           Дикси
     fixprice.py       Fix Price
+    vkusvill.py       ВкусВилл (MCP)
     lenta/            Лента: api, http_client, qrator, browser_session, recon
   cli.py              typer CLI
 alembic/              миграции

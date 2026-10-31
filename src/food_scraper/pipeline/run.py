@@ -224,7 +224,7 @@ async def _scrape_store(
             await prepare()
         cats = await shop.categories()
         async with session_scope() as session:
-            await upsert_categories(session, shop.name, cats)
+            await upsert_categories(session, shop.name, [c for c in cats if c.persist])
         leaves = [category_id] if category_id else [c.id for c in cats if not c.has_children]
         log.info("categories_synced", total=len(cats), leaves=len(leaves))
 
@@ -235,6 +235,7 @@ async def _scrape_store(
         seen: dict[str, bool] = {}
         # Листья, которые магазин отдал в листинге (Дикси): дерево без id, листья узнаём из товаров
         listed_categories: dict[str, CategoryRow] = {}
+        persisted = {c.id for c in cats if c.persist}
         sem = asyncio.Semaphore(workers)
 
         blocked: list[BaseException] = []
@@ -262,9 +263,16 @@ async def _scrape_store(
                         )
                     for item in fresh:
                         product_store.setdefault(item.id, store)
+                        if item.category_parent_id and item.category_parent_id not in listed_categories:
+                            listed_categories[item.category_parent_id] = CategoryRow(
+                                id=item.category_parent_id, parent_id=None,
+                                name=item.category_parent_name or "", level=0, has_children=True,
+                            )
                         if item.category_id and item.category_id not in listed_categories:
+                            # Родитель — раздел из товара, иначе обходимая категория (если она настоящая)
+                            parent = item.category_parent_id or (cid if cid in persisted else None)
                             listed_categories[item.category_id] = CategoryRow(
-                                id=item.category_id, parent_id=cid, name=item.category_name or "", level=1,
+                                id=item.category_id, parent_id=parent, name=item.category_name or "", level=1,
                             )
                     stats["categories"] += 1
                     stats["prices"] += new_prices
@@ -278,8 +286,7 @@ async def _scrape_store(
         await asyncio.gather(*(one(c) for c in leaves))
         if blocked:
             raise ShopBlocked(str(blocked[0])) from blocked[0]
-        known = {c.id for c in cats}
-        new_categories = [c for c in listed_categories.values() if c.id not in known]
+        new_categories = [c for c in listed_categories.values() if c.id not in persisted]
         if new_categories:
             async with session_scope() as session:
                 await upsert_categories(session, shop.name, new_categories)

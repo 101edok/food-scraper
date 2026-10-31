@@ -16,6 +16,9 @@ const TARGETS = [
   { shop: "dixy", city: "moscow", daily: "30 5 * * 1-6", weekly: "0 7 * * 0", stores: 6, workers: 2 },
   // Fix Price: цена по городу — одна точка, ~1 мин; полный прогон только обновляет справочник
   { shop: "fixprice", city: "moscow", daily: "0 6 * * 1-6", weekly: "0 6 * * 0" },
+  // ВкусВилл через официальный MCP: 1 запрос/с, ~300 поисковых запросов (ингредиенты рецептов + базовые
+  // продукты) по 3 страницы — ~15 мин; полный прогон обновляет справочник точек (~3 мин)
+  { shop: "vkusvill", city: "moscow", daily: "30 6 * * 1-6", weekly: "30 6 * * 0", workers: 1 },
 ];
 
 const app = (name, args, cron) => ({

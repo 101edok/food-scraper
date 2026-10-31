@@ -1,0 +1,84 @@
+{
+ "ok": true,
+ "data": {
+  "meta": {
+   "q": "молоко",
+   "limit": 2,
+   "total": 857,
+   "page": 1,
+   "pages": 429,
+   "has_more": true,
+   "personalized": false
+  },
+  "items": [
+   {
+    "id": 36296,
+    "name": "Молоко 2,5% в бутылке, 900&nbsp;мл",
+    "slug": "moloko-2",
+    "description": "Нормализованное пастеризованное молоко, которое замечательно подойдёт для добавления в напитки и сухие завтраки, а также приготовления аппетитных блинчиков, оладий, сочных смузи и молочных десертов.",
+    "price": {
+     "current": 100,
+     "currency": "RUB",
+     "old": null,
+     "discount_percent": null,
+     "discount_info": null
+    },
+    "unit": "шт",
+    "weight": {
+     "value": 0.9,
+     "unit": "кг"
+    },
+    "rating": {
+     "average": 4.9,
+     "count": 127175
+    },
+    "url": "https://vkusvill.ru/goods/moloko-2-36296/",
+    "images": [
+     {
+      "small": "https://img.vkusvill.ru/pim/images/site_MiniWebP/c2c2ccb3-c4ce-40a9-ac57-0eb10abcc389.webp?1696204211.9052",
+      "medium": "https://img.vkusvill.ru/pim/images/site_BigWebP/c2c2ccb3-c4ce-40a9-ac57-0eb10abcc389.webp?1696204210.6983",
+      "large": "https://img.vkusvill.ru/pim/images/site_LargeWebP/c2c2ccb3-c4ce-40a9-ac57-0eb10abcc389.webp?1696204213.5654"
+     }
+    ],
+    "category": [
+     {
+      "id": 50390,
+      "name": "Молоко, сливки, сгущёнка",
+      "slug": "moloko-slivki-sgushchyenka",
+      "url": "https://vkusvill.ru/goods/molochnye-produkty-yaytso/moloko-slivki-sgushchyenka/"
+     },
+     {
+      "id": 50388,
+      "name": "Молочные продукты, яйцо",
+      "slug": "molochnye-produkty-yaytso",
+      "url": "https://vkusvill.ru/goods/molochnye-produkty-yaytso/"
+     }
+    ],
+    "properties": [
+     {
+      "name": "Пищевая и энергетическая ценность в 100 г",
+      "value": "белки 3 г, жиры 2.5 г, углеводы 4.7 г; 53.3 ккал Поставщики:ООО \"КОСМОЛ\";ООО \"КУРСКОЕ МОЛОКО\";АО \"ЗМК\";ООО \"ЛЕБЕДЯНЬМОЛОКО\""
+     },
+     {
+      "name": "Состав",
+      "value": "ООО \"КОСМОЛ\":молоко цельное, молоко обезжиренное.;<br>ООО \"КУРСКОЕ МОЛОКО\":Молоко цельное, молоко обезжиренное;<br>АО \"ЗМК\":молоко нормализованное ;<br>ООО \"ЛЕБЕДЯНЬМОЛОКО\":молоко цельное, молоко обезжиренное.;<br>"
+     }
+    ]
+   }
+  ],
+  "facets": {
+   "categories": [
+    {
+     "category_id": 101,
+     "category_name": "Молоко, сливки",
+     "subcategory_name": ""
+    },
+    {
+     "category_id": 628,
+     "category_name": "Детское молочное питание",
+     "subcategory_name": ""
+    }
+   ]
+  }
+ }
+}

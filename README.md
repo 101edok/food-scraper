@@ -6,6 +6,7 @@
 | Магазин | Статус | Как |
 |---|---|---|
 | Магнит | работает | BFF фронта `magnit.ru/webgate`, антибота нет — см. [recon/magnit.md](recon/magnit.md) |
+| Дикси | работает | PHP-ручки Битрикса `/ajax/*.php`, магазин в PHP-сессии, Qrator пропускает — см. [recon/dixy.md](recon/dixy.md) |
 | Лента | нужен RU-резидентный прокси | реверс `api-gateway`, Qrator режет IP дата-центров (russia-03 и finland-01 — 403) |
 
 Один прогон — одна сеть × один город, по нескольким точкам сети. Цена хранится по
@@ -139,6 +140,7 @@ src/food_scraper/
   shops/
     base.py           контракт адаптера + get_shop()
     magnit.py         Магнит
+    dixy.py           Дикси
     lenta/            Лента: api, http_client, qrator, browser_session, recon
   cli.py              typer CLI
 alembic/              миграции

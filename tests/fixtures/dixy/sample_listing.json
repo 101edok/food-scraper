@@ -1,0 +1,214 @@
+[
+ {
+  "title": null,
+  "class": null,
+  "pagenData": {
+   "element_count": "167",
+   "page": 1,
+   "pages_count": 6,
+   "page_size": 30,
+   "pagen_text": "Показать ещё 137 товаров",
+   "isLastPage": false,
+   "navigation": [
+    {
+     "num": 1,
+     "active": true,
+     "url": "?page=1"
+    },
+    {
+     "num": 2,
+     "active": false,
+     "url": "?page=2"
+    },
+    {
+     "num": 3,
+     "active": false,
+     "url": "?page=3"
+    },
+    {
+     "num": 4,
+     "active": false,
+     "url": "?page=4"
+    },
+    {
+     "num": 5,
+     "active": false,
+     "url": "?page=5"
+    },
+    {
+     "num": 6,
+     "active": false,
+     "url": "?page=6"
+    }
+   ]
+  },
+  "cards": [
+   {
+    "id": "209399",
+    "stamp": 1793448446,
+    "xml_id": "10E0074360",
+    "title": "Бананы спелые",
+    "weight": "1000 гр",
+    "url": "/product/banany-spelye-10e0074360/",
+    "ratio": 0.7,
+    "realRatio": 0.7,
+    "src": "/upload/iblock/2dd/0wcoui6ltf6ia71jh1ljj76ejeiadv03.webp",
+    "amount": 224.23,
+    "symbol": "кг",
+    "realSymbol": "кг",
+    "quantity": 0,
+    "bskState": [
+     "not"
+    ],
+    "isAlko": null,
+    "isGift": false,
+    "clickableAddressLink": true,
+    "isEnergyDrink": false,
+    "hideAlko": false,
+    "hideEnergy": false,
+    "canBeFavorite": false,
+    "canBeFavoriteListing": false,
+    "bs-not": true,
+    "bs-in": false,
+    "bs-del": false,
+    "bs-limit": false,
+    "tpl_path": "/local/templates/dixy_ru",
+    "section": "Фрукты",
+    "section_id": "39",
+    "parent_section": "",
+    "index": 1,
+    "variant": "весовой",
+    "store": {
+     "storeAddress": "117042, Москва г, Южнобутовская ул, д.97"
+    },
+    "brand": null,
+    "type": "Бананы",
+    "rating": "4.8",
+    "rating_listing": "4.8",
+    "is_limit_favorites": null,
+    "isWUI": null,
+    "recQuantum": "0.7",
+    "showBlur": false,
+    "detail_src": "/local/templates/dixy_ru/images/img-product.webp",
+    "previews": [
+     {
+      "src": "/upload/iblock/2dd/0wcoui6ltf6ia71jh1ljj76ejeiadv03.webp"
+     },
+     {
+      "src": "/upload/iblock/7a8/5m2oa4bpcjw291r790gwnufjtn8ut9ip.webp"
+     },
+     {
+      "src": "/upload/iblock/055/x40kckp6gl180j5lo0lgojzbevmyiyyl.webp"
+     },
+     {
+      "src": "/upload/iblock/7bd/m5rgf2jtgr4nxoqfbjsomatg9zjil92s.webp"
+     },
+     {
+      "src": "/upload/iblock/dc6/rdwwuctyvr4kwk9k8kkyw97puaxugz8x.webp"
+     }
+    ],
+    "details": {
+     "src": "/local/templates/dixy_ru/images/img-product.webp"
+    },
+    "canBuy": true,
+    "hidePrice": false,
+    "showNoticeInfo": false,
+    "isEnoughText": "В наличии достаточно",
+    "bskFields": "209399 0.7 224.23 кг 0",
+    "price": "124.<span>99</span><span class='rub'>руб.</span>",
+    "crossPrice": false,
+    "priceSimple": "124.99",
+    "oldPriceSimple": "124.99",
+    "priceAll": "0.<span>00</span><span class='rub'>руб.</span>",
+    "oldPriceAll": "0.<span>00</span><span class='rub'>руб.</span>",
+    "oldPrice": "124.<span>99</span><span class='rub'>руб.</span>",
+    "subTitle": ""
+   },
+   {
+    "id": "209636",
+    "stamp": 1793448446,
+    "xml_id": "DI00078763",
+    "title": "Мандарины",
+    "weight": "1000 гр",
+    "url": "/product/mandariny-di00078763/",
+    "ratio": 1,
+    "realRatio": 1,
+    "src": "/upload/iblock/020/i0kb2n0bsyvbq44enpg33pnctn72blw3.webp",
+    "amount": 248.53,
+    "symbol": "кг",
+    "realSymbol": "кг",
+    "quantity": 0,
+    "bskState": [
+     "not"
+    ],
+    "isAlko": null,
+    "isGift": false,
+    "clickableAddressLink": true,
+    "isEnergyDrink": false,
+    "hideAlko": false,
+    "hideEnergy": false,
+    "canBeFavorite": false,
+    "canBeFavoriteListing": false,
+    "bs-not": true,
+    "bs-in": false,
+    "bs-del": false,
+    "bs-limit": false,
+    "tpl_path": "/local/templates/dixy_ru",
+    "section": "Фрукты",
+    "section_id": "39",
+    "parent_section": "",
+    "index": 2,
+    "variant": "весовой",
+    "store": {
+     "storeAddress": "117042, Москва г, Южнобутовская ул, д.97"
+    },
+    "brand": null,
+    "type": "Мандарины",
+    "rating": "4.7",
+    "rating_listing": "4.7",
+    "is_limit_favorites": null,
+    "isWUI": null,
+    "recQuantum": "1",
+    "showBlur": false,
+    "detail_src": "/local/templates/dixy_ru/images/img-product.webp",
+    "previews": [
+     {
+      "src": "/upload/iblock/020/i0kb2n0bsyvbq44enpg33pnctn72blw3.webp"
+     },
+     {
+      "src": "/upload/iblock/558/ik4kyejffgc651vm1i8di87sxa50twpd.webp"
+     }
+    ],
+    "details": {
+     "src": "/local/templates/dixy_ru/images/img-product.webp"
+    },
+    "canBuy": true,
+    "hidePrice": false,
+    "showNoticeInfo": false,
+    "isEnoughText": "В наличии достаточно",
+    "bskFields": "209636 1 248.53 кг 0",
+    "status": "in-time",
+    "oldPrice": "249.<span>99</span><span class='rub'>руб.</span>",
+    "price": "149.<span>99</span><span class='rub'>руб.</span>",
+    "badges": [
+     {
+      "class": "yellow",
+      "num": "-40%",
+      "title": "по акции"
+     },
+     {
+      "class": "grey",
+      "title": "до 01.11.2026"
+     }
+    ],
+    "crossPrice": true,
+    "priceSimple": "149.99",
+    "oldPriceSimple": "249.99",
+    "priceAll": "0.<span>00</span><span class='rub'>руб.</span>",
+    "oldPriceAll": "0.<span>00</span><span class='rub'>руб.</span>",
+    "subTitle": ""
+   }
+  ],
+  "_note": "GET /ajax/listing-json.php?block=product-list&sid=37&perPage=30&page=1&collect_stat; оставлено 2 карточки из 30, удалены card_template/filterData/seoFilter/externalResult"
+ }
+]

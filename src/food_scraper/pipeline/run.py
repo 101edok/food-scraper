@@ -17,7 +17,8 @@ from ..cities import City, get_city
 from ..db import session_scope
 from ..models import ScrapeRun
 from ..shops.base import ItemRow, Shop, get_shop
-from ..stores import StoreRow, dedupe, grid_points, spread_sample
+from ..shops.base import CategoryRow
+from ..stores import StoreRow, dedupe, distance_km, grid_points, spread_sample
 from ..upsert import (
     ids_needing_details,
     load_stores,
@@ -122,18 +123,28 @@ async def _registry(shop: Shop, city: City, *, refresh: bool, workers: int) -> l
         if registry:
             return registry
 
-    points = grid_points(city)
     found: list[StoreRow] = []
-    sem = asyncio.Semaphore(workers)
+    list_stores = getattr(shop, "list_stores", None)
+    if list_stores is not None:
+        # Вся сеть одним запросом — оставляем точки в радиусе города
+        points = []
+        found = [
+            s for s in await list_stores()
+            if s.lat is not None and s.lon is not None
+            and distance_km((s.lat, s.lon), (city.lat, city.lon)) <= city.radius_km
+        ]
+    else:
+        points = grid_points(city)
+        sem = asyncio.Semaphore(workers)
 
-    async def one(lat: float, lon: float) -> None:
-        async with sem:
-            try:
-                found.extend(await shop.find_stores(lat, lon))
-            except Exception as e:
-                log.warning("stores_point_failed", lat=lat, lon=lon, err=str(e))
+        async def one(lat: float, lon: float) -> None:
+            async with sem:
+                try:
+                    found.extend(await shop.find_stores(lat, lon))
+                except Exception as e:
+                    log.warning("stores_point_failed", lat=lat, lon=lon, err=str(e))
 
-    await asyncio.gather(*(one(lat, lon) for lat, lon in points))
+        await asyncio.gather(*(one(lat, lon) for lat, lon in points))
     stores = dedupe(found)
     async with session_scope() as session:
         deactivated = await upsert_stores(session, shop=shop.name, city=city.slug, stores=stores, now=utcnow())
@@ -192,6 +203,8 @@ async def _scrape_store(
         # Внутри точки товар лежит в нескольких категориях (плюс промо-подборки) — цену пишем один раз.
         # Проверка и добавление идут без await между ними, так что гонок между задачами нет.
         seen: set[str] = set()
+        # Листья, которые магазин отдал в листинге (Дикси): дерево без id, листья узнаём из товаров
+        listed_categories: dict[str, CategoryRow] = {}
         sem = asyncio.Semaphore(workers)
 
         async def one(cid: str) -> None:
@@ -213,6 +226,10 @@ async def _scrape_store(
                         )
                     for item in fresh:
                         product_store.setdefault(item.id, store)
+                        if item.category_id and item.category_id not in listed_categories:
+                            listed_categories[item.category_id] = CategoryRow(
+                                id=item.category_id, parent_id=cid, name=item.category_name or "", level=1,
+                            )
                     stats["categories"] += 1
                     stats["prices"] += len(fresh)
                     log.debug("category_done", category_id=cid, items=n, new=len(fresh), price_changed=changed)
@@ -221,6 +238,11 @@ async def _scrape_store(
                     log.warning("category_failed", category_id=cid, err=str(e))
 
         await asyncio.gather(*(one(c) for c in leaves))
+        known = {c.id for c in cats}
+        new_categories = [c for c in listed_categories.values() if c.id not in known]
+        if new_categories:
+            async with session_scope() as session:
+                await upsert_categories(session, shop.name, new_categories)
     finally:
         structlog.contextvars.unbind_contextvars("store_code")
 

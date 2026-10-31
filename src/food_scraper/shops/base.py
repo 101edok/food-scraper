@@ -35,6 +35,9 @@ class ItemRow:
     unit_price_minor: int | None = None
     unit_label: str | None = None
     is_adult: bool = False
+    # Лист дерева, если магазин отдаёт его прямо в листинге (Дикси); иначе категорию даёт карточка
+    category_id: str | None = None
+    category_name: str | None = None
 
 
 @dataclass(slots=True)
@@ -66,6 +69,10 @@ class Shop(Protocol):
     async def find_stores(self, lat: float, lon: float) -> list[StoreRow]:
         """Точки сети рядом с координатой — только форматы, каталог которых умеем читать."""
 
+    # Необязательно: если сеть отдаёт все точки одним запросом (Дикси), пайплайн берёт их отсюда,
+    # оставляет попавшие в радиус города и не обходит город сеткой.
+    # async def list_stores(self) -> list[StoreRow]: ...
+
     def use_store(self, store: StoreRow) -> None:
         """Дальнейшие categories/iter_items/details идут в каталог этой точки."""
 
@@ -88,4 +95,8 @@ def get_shop(name: str) -> Shop:
         from .lenta import Lenta
 
         return Lenta(s)
-    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, lenta")
+    if name == "dixy":
+        from .dixy import Dixy
+
+        return Dixy(s)
+    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, dixy, lenta")

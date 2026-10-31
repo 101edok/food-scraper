@@ -1,0 +1,56 @@
+{
+ "_note": "POST /ajax/ajax.php multipart action=getSelfPoints; 3 из 737; coordinates = [lat, lon] строками",
+ "items": [
+  {
+   "type": "Feature",
+   "id": "4",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     "52.761077",
+     "32.263744"
+    ]
+   },
+   "properties": {
+    "id": "4",
+    "balloonContentHeader": "ДИКСИ 32007",
+    "balloonContentBody": "243146, Брянская обл, Клинцы г, Ворошилова ул, д.28,",
+    "balloonContentFooter": "08 - 22"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "1353",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     "55.737758",
+     "37.631287"
+    ]
+   },
+   "properties": {
+    "id": "1353",
+    "balloonContentHeader": "ДИКСИ 77162",
+    "balloonContentBody": "115184, Москва г, Новокузнецкая ул, д.13, 1",
+    "balloonContentFooter": "08 - 22"
+   }
+  },
+  {
+   "type": "Feature",
+   "id": "1586",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     "55.815679",
+     "37.463612"
+    ]
+   },
+   "properties": {
+    "id": "1586",
+    "balloonContentHeader": "ДИКСИ 77534",
+    "balloonContentBody": "125367, Москва г, Габричевского ул, д.10, 4",
+    "balloonContentFooter": "08 - 23"
+   }
+  }
+ ]
+}

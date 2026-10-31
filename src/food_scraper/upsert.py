@@ -86,24 +86,24 @@ async def save_items(
     items = list({it.id: it for it in items}.values())
     ids = [it.id for it in items]
 
-    # first_seen_at не перетираем: в update его нет.
-    await _upsert(
-        session,
-        Product,
-        [
-            {
-                "shop": shop,
-                "id": it.id,
-                "name": it.name[:1024],
-                "url": it.url,
-                "is_weighted": it.is_weighted,
-                "is_adult": it.is_adult,
-                "first_seen_at": now,
-            }
-            for it in items
-        ],
-        ["name", "url", "is_weighted", "is_adult"],
-    )
+    # first_seen_at не перетираем: в update его нет. Категорию из листинга пишем, только если она есть —
+    # иначе её задаёт карточка, и листинг не должен затирать её на NULL.
+    def product_row(it: ItemRow) -> dict[str, Any]:
+        row = {
+            "shop": shop, "id": it.id, "name": it.name[:1024], "url": it.url,
+            "is_weighted": it.is_weighted, "is_adult": it.is_adult, "first_seen_at": now,
+        }
+        if it.category_id:
+            row["category_id"] = it.category_id
+        return row
+
+    product_cols = ["name", "url", "is_weighted", "is_adult"]
+    with_category = [product_row(it) for it in items if it.category_id]
+    without_category = [product_row(it) for it in items if not it.category_id]
+    if without_category:
+        await _upsert(session, Product, without_category, product_cols)
+    if with_category:
+        await _upsert(session, Product, with_category, product_cols + ["category_id"])
 
     images = [
         {"shop": shop, "product_id": it.id, "position": pos, "url": url[:1024]}

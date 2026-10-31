@@ -11,6 +11,8 @@
 // Новый город: строка в TARGETS (slug из src/food_scraper/cities.py) со сдвинутым временем.
 const TARGETS = [
   { shop: "magnit", city: "moscow", daily: "0 4 * * 1-6", weekly: "0 1 * * 0" },
+  // Дикси: 3 запроса/с (Qrator), точка ~3 мин — полный прогон Москвы ~7 ч, после Магнита
+  { shop: "dixy", city: "moscow", daily: "30 5 * * 1-6", weekly: "0 7 * * 0" },
 ];
 
 const app = (name, args, cron) => ({

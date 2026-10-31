@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+import httpx
 import structlog
 
 from ..cities import City, get_city
@@ -29,6 +30,18 @@ from ..upsert import (
 )
 
 log = structlog.get_logger(__name__)
+
+# 401/403 от магазина — антибот закрыл нам доступ. Дальше стучаться бессмысленно и вредно:
+# каждый лишний запрос продлевает бан (Дикси забанил IP russia-03 целиком после ~100 запросов в 403).
+BLOCKED_STATUSES = {401, 403}
+
+
+class ShopBlocked(RuntimeError):
+    pass
+
+
+def _is_blocked(e: BaseException) -> bool:
+    return isinstance(e, httpx.HTTPStatusError) and e.response.status_code in BLOCKED_STATUSES
 
 
 def utcnow() -> datetime:
@@ -82,9 +95,13 @@ async def run(
                         shop, store, run_id=run_id, city=city.slug, category_id=category_id,
                         limit=limit, workers=workers, stats=stats, product_store=product_store,
                     )
+                except ShopBlocked:
+                    raise
                 except Exception as e:
                     stats["errors"] += 1
                     log.warning("store_failed", store_code=store.code, err=str(e))
+                    if _is_blocked(e):
+                        raise ShopBlocked(str(e)) from e
                 stats["stores"] = n
                 stats["products"] = len(product_store)
                 await _save_progress(run_id, stats, store_code=store_code)
@@ -95,6 +112,10 @@ async def run(
                 shop, product_store, max_age=details_max_age, limit=details_limit,
                 workers=workers, stats=stats, run_id=run_id,
             )
+    except ShopBlocked as e:
+        # Не падаем с трейсбеком: это не баг, а сигнал «магазин нас не пускает» — видно в статусе
+        status = "blocked"
+        log.error("run_blocked", err=str(e))
     except Exception as e:
         status = "failed"
         log.exception("run_failed", err=str(e))
@@ -197,6 +218,10 @@ async def _scrape_store(
     shop.use_store(store)
     structlog.contextvars.bind_contextvars(store_code=store.code)
     try:
+        # Выбор точки на стороне магазина (сессия Дикси) — один раз; не вышло — точку пропускаем целиком
+        prepare = getattr(shop, "prepare_store", None)
+        if prepare is not None:
+            await prepare()
         cats = await shop.categories()
         async with session_scope() as session:
             await upsert_categories(session, shop.name, cats)
@@ -212,8 +237,12 @@ async def _scrape_store(
         listed_categories: dict[str, CategoryRow] = {}
         sem = asyncio.Semaphore(workers)
 
+        blocked: list[BaseException] = []
+
         async def one(cid: str) -> None:
             async with sem:
+                if blocked:
+                    return
                 try:
                     fresh: list[ItemRow] = []
                     n = new_prices = 0
@@ -243,8 +272,12 @@ async def _scrape_store(
                 except Exception as e:
                     stats["errors"] += 1
                     log.warning("category_failed", category_id=cid, err=str(e))
+                    if _is_blocked(e):
+                        blocked.append(e)
 
         await asyncio.gather(*(one(c) for c in leaves))
+        if blocked:
+            raise ShopBlocked(str(blocked[0])) from blocked[0]
         known = {c.id for c in cats}
         new_categories = [c for c in listed_categories.values() if c.id not in known]
         if new_categories:
@@ -278,12 +311,20 @@ async def _scrape_details(
         by_store.setdefault(product_store[item_id].code, []).append(item_id)
     stores = {s.code: s for s in product_store.values()}
 
+    blocked: list[BaseException] = []
     for code, ids in by_store.items():
+        if blocked:
+            break
         shop.use_store(stores[code])
+        prepare = getattr(shop, "prepare_store", None)
+        if prepare is not None:
+            await prepare()
         sem = asyncio.Semaphore(workers)
 
         async def one(item_id: str) -> None:
             async with sem:
+                if blocked:
+                    return
                 try:
                     d = await shop.details(item_id)
                     if d is None:
@@ -297,5 +338,9 @@ async def _scrape_details(
                 except Exception as e:
                     stats["errors"] += 1
                     log.warning("details_failed", item_id=item_id, err=str(e))
+                    if _is_blocked(e):
+                        blocked.append(e)
 
         await asyncio.gather(*(one(i) for i in ids))
+    if blocked:
+        raise ShopBlocked(str(blocked[0])) from blocked[0]

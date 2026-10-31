@@ -199,3 +199,25 @@ def test_spread_sample_is_deterministic():
     assert [s.code for s in a] == [s.code for s in b]
     assert a[0].code == "20"  # ближайшая к центру
     assert {"0", "39"} <= {s.code for s in a}  # края города попали в выборку
+
+
+async def test_forbidden_stops_run_as_blocked(sqlite_db, clock, shop):
+    import httpx
+
+    calls: list[tuple[str, str]] = []
+
+    async def forbidden(category_id):
+        calls.append((shop.store_code, category_id))
+        request = httpx.Request("GET", "https://shop.example/catalog")
+        raise httpx.HTTPStatusError("403 Forbidden", request=request,
+                                    response=httpx.Response(403, request=request))
+        yield  # noqa: unreachable — делает функцию async-генератором
+
+    shop.iter_items = forbidden
+    await run_mod.run("fake", "moscow", stores=None, workers=1)
+
+    r = (await _all(ScrapeRun))[0]
+    assert r.status == "blocked"
+    # Первая же 403 останавливает всё: ни второй категории, ни других точек, ни карточек
+    assert len(calls) == 1
+    assert shop.details_calls == []

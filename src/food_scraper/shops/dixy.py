@@ -24,7 +24,9 @@ log = structlog.get_logger(__name__)
 
 BASE_URL = "https://dixy.ru"
 PAGE_SIZE = 30  # больше 30 — пустой ответ
-MAX_RPS = 3
+# Разведка прошла на ~3 rps последовательно, но два параллельных прогона (6 rps и частая смена
+# точки) получили бан IP. Держим 2 rps и не запускаем ежедневный и полный прогоны одновременно.
+MAX_RPS = 2
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 # Корни дерева, где товары других корней повторяются, и промо-подборки без своего ассортимента
 SKIP_ROOTS = {"Скидки по карте"}
@@ -113,6 +115,9 @@ class Dixy:
         self._store = store
         self.store_code = store.code
         self._store_saved = False
+
+    async def prepare_store(self) -> None:
+        await self._ensure_store()
 
     async def _ensure_store(self) -> None:
         if self._store_saved or self._store is None:

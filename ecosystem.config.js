@@ -11,8 +11,9 @@
 // Новый город: строка в TARGETS (slug из src/food_scraper/cities.py) со сдвинутым временем.
 const TARGETS = [
   { shop: "magnit", city: "moscow", daily: "0 4 * * 1-6", weekly: "0 1 * * 0" },
-  // Дикси: 3 запроса/с (Qrator), точка ~3 мин — полный прогон Москвы ~7 ч, после Магнита
-  { shop: "dixy", city: "moscow", daily: "30 5 * * 1-6", weekly: "0 7 * * 0" },
+  // Дикси за Qrator: 2 запроса/с, 2 потока, 6 точек в день. Два прогона одновременно (6 rps и частая
+  // смена точки) 2026-10-31 получили бан IP russia-03 — ежедневный и полный не пересекаются.
+  { shop: "dixy", city: "moscow", daily: "30 5 * * 1-6", weekly: "0 7 * * 0", stores: 6, workers: 2 },
   // Fix Price: цена по городу — одна точка, ~1 мин; полный прогон только обновляет справочник
   { shop: "fixprice", city: "moscow", daily: "0 6 * * 1-6", weekly: "0 6 * * 0" },
 ];
@@ -28,8 +29,8 @@ const app = (name, args, cron) => ({
 });
 
 module.exports = {
-  apps: TARGETS.flatMap(({ shop, city, daily, weekly }) => [
-    app(`food-scraper-${shop}-${city}`, `run --shop ${shop} --city ${city} --stores 12`, daily),
-    app(`food-scraper-${shop}-${city}-full`, `run --shop ${shop} --city ${city} --all-stores --refresh-stores`, weekly),
+  apps: TARGETS.flatMap(({ shop, city, daily, weekly, stores = 12, workers = 4 }) => [
+    app(`food-scraper-${shop}-${city}`, `run --shop ${shop} --city ${city} --stores ${stores} --workers ${workers}`, daily),
+    app(`food-scraper-${shop}-${city}-full`, `run --shop ${shop} --city ${city} --all-stores --refresh-stores --workers ${workers}`, weekly),
   ]),
 };

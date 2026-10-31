@@ -80,7 +80,7 @@ def test_parse_item_skips_items_without_price():
 
 def test_parse_details_nutrition_brand_weight():
     d = parse_details(DETAILS)
-    assert d.category_id == "115428"
+    assert d.category_id is None  # id карточки не из дерева категорий — берём категорию из листинга
     assert (d.kcal, d.protein, d.fat, d.carbs) == (69.0, 11.6, 0.2, 5.1)
     assert d.composition == "Молоко обезжиренное"
     assert d.brand == "Neo"

@@ -12,7 +12,7 @@ from sqlalchemy import case, delete, func, select
 
 from . import alerts
 from .db import session_scope
-from .models import Price, Product, QualityIssue, ScrapeRun
+from .models import Category, Price, Product, QualityIssue, ScrapeRun
 
 log = structlog.get_logger(__name__)
 
@@ -21,6 +21,38 @@ OUTLIER_FACTOR = 10  # цена за кг/л в 10 раз выше или ниж
 OUTLIER_MIN_CATEGORY = 5
 NO_PACK_SHARE = 0.3  # доля товаров без фасовки, после которой цену за кг не посчитать для заметной части
 RECENT_RUNS = timedelta(days=14)
+
+
+# Разделы не с едой: цена за кг у кассет для бритья и ополаскивателей не говорит о качестве данных.
+# Проверяем название категории и всех её родителей (основы слов, без регистра).
+NON_FOOD_WORDS = (
+    "гигиен", "косметик", "химия", "хозтовар", "для дома", "для животных", "для кошек", "для собак",
+    "алкогол", "товары для детей", "канцтовар", "цветы", "игры", "игруш", "уход за", "маникюр",
+    "стирк", "чистящ", "мелочей", "подарк", "для лица", "одежд",
+)
+# Разделы со смешанным ассортиментом — только по точному названию: «Для детей» у Магнита, а не «Каши для детей»
+NON_FOOD_NAMES = {"для детей", "здоровье", "полка находок", "что ещё интересного", "для дома и не только"}
+
+
+def non_food_categories(rows: list[tuple[str, str, str | None, str]]) -> set[tuple[str, str]]:
+    """rows: (shop, id, parent_id, name) → (shop, id) категорий, у которых сама она или родитель — не еда."""
+    nodes = {(shop, cid): (parent, (name or "").lower()) for shop, cid, parent, name in rows}
+
+    def is_non_food(key: tuple[str, str]) -> bool:
+        for _ in range(10):  # глубина дерева небольшая; защита от циклов
+            node = nodes.get(key)
+            if node is None:
+                return False
+            parent, name = node
+            # «Детское питание» — еда, а «Товары для детей» и «Детское развитие, творчество и игры» — нет
+            if (name.strip() in NON_FOOD_NAMES or any(w in name for w in NON_FOOD_WORDS)) and "питани" not in name:
+                return True
+            if not parent:
+                return False
+            key = (key[0], parent)
+        return False
+
+    return {key for key in nodes if is_non_food(key)}
 
 
 def outliers(rows: list[tuple[str, str | None, str, float, str]]) -> list[tuple[str, str, float, float]]:
@@ -92,7 +124,10 @@ async def check_all(now: datetime) -> dict[str, int]:
             .join(min_price, (min_price.c.shop == Product.shop) & (min_price.c.product_id == Product.id))
             .where(Product.net_quantity > 0)
         )).all()
-        unit_rows = [(shop, cat, pid, price / float(qty), unit) for shop, cat, pid, price, qty, unit in rows]
+        non_food = non_food_categories((await session.execute(
+            select(Category.shop, Category.id, Category.parent_id, Category.name))).all())
+        unit_rows = [(shop, cat, pid, price / float(qty), unit) for shop, cat, pid, price, qty, unit in rows
+                     if (shop, cat) not in non_food]
         units = {(shop, pid): unit for shop, _, pid, _, unit in unit_rows}
         for shop, product_id, price, median in outliers(unit_rows):
             issue(shop, "price_outlier", "warning", outlier_message(price, median, units[(shop, product_id)]),

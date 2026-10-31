@@ -168,6 +168,8 @@ class Magnit:
             for it in data.get("items") or []:
                 row = parse_item(it)
                 if row:
+                    # Категория — обходимый лист дерева /v3/categories: в карточке id из другого справочника
+                    row.category_id = category_id
                     yield row
             page = data.get("pagination") or {}
             if not page.get("hasMore") or page.get("nextOffset") is None:
@@ -210,8 +212,7 @@ _NUTRITION = {"Ккал": "kcal", "Белки": "protein", "Жиры": "fat", "�
 
 def parse_details(d: dict[str, Any]) -> DetailsRow:
     row = DetailsRow(id=str(d["id"]))
-    cats = d.get("categories") or []
-    row.category_id = str(cats[0]) if cats else None
+    # d["categories"] — id не из дерева /v3/categories (115670 вместо 100xxx), категорию берём из листинга
     row.image_urls = [g["url"] for g in d.get("gallery") or [] if g.get("type") == "IMAGE" and g.get("url")]
     for group in d.get("details") or []:
         gname = group.get("name") or ""

@@ -132,3 +132,14 @@ def test_outlier_message_is_readable():
     assert outlier_message(4.75, 66.48, "g") == \
         "Цена за кг в 14 раз ниже, чем обычно в категории: 47,50 ₽/кг против 664,80 ₽/кг. Проверьте фасовку"
     assert "в 3 раза выше" in outlier_message(300, 100, "pcs")
+
+
+def test_non_food_categories():
+    from food_scraper.quality import non_food_categories
+    rows = [
+        ("magnit", "1", None, "Гигиена и уход"), ("magnit", "2", "1", "Бритьё"),
+        ("magnit", "3", None, "Овощи и фрукты"), ("magnit", "4", "3", "Капуста цветная"),
+        ("magnit", "5", None, "Для детей"), ("vkusvill", "6", None, "Детское питание и гигиена"),
+        ("vkusvill", "7", None, "Каши для детей"), ("magnit", "8", None, "Алкоголь"),
+    ]
+    assert non_food_categories(rows) == {("magnit", "1"), ("magnit", "2"), ("magnit", "5"), ("magnit", "8")}

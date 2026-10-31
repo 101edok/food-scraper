@@ -295,6 +295,7 @@ def check_cmd() -> None:
 
 @app.command("postprocess", help="После прогонов: match → recipe-costs → check.")
 def postprocess_cmd() -> None:
+    from . import db
     from .matching import match_all
     from .pipeline.run import utcnow
     from .quality import check_all
@@ -305,6 +306,7 @@ def postprocess_cmd() -> None:
         typer.echo(f"recipe-costs: {await compute_all(utcnow())}")
         typer.echo(f"check: {await check_all(utcnow())}")
 
+    db.statement_timeout_ms = 600_000  # агрегаты по всем ценам (сотни тысяч строк) дольше серверных 30 с
     asyncio.run(go())
 
 

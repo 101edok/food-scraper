@@ -129,9 +129,13 @@ async def compute_all(now: datetime) -> dict[str, int]:
             select(IngredientMatch.ingredient_id, IngredientMatch.shop, IngredientMatch.product_id,
                    IngredientMatch.status).where(IngredientMatch.status != "rejected")
         )).all()
+        # Только цены сопоставленных товаров: всех цен — сотни тысяч (товары × точки)
+        matched = select(IngredientMatch.shop, IngredientMatch.product_id) \
+            .where(IngredientMatch.status != "rejected").distinct().subquery()
         rows = (await session.execute(
             select(Price.shop, Price.city, Price.product_id, Price.price_minor,
                    Product.name, Product.net_quantity, Product.net_unit)
+            .join(matched, (matched.c.shop == Price.shop) & (matched.c.product_id == Price.product_id))
             .join(Product, (Product.shop == Price.shop) & (Product.id == Price.product_id))
             .where(Price.price_minor.is_not(None), Product.net_quantity.is_not(None))
         )).all()

@@ -16,6 +16,9 @@ from .config import Settings, get_settings
 
 _engine: AsyncEngine | None = None
 _factory: async_sessionmaker[AsyncSession] | None = None
+# Лимит MySQL на один SELECT (мс). На сервере глобально 30 с — мало для постобработки по всем ценам.
+# Задаётся до первого get_engine(); None — оставить серверный.
+statement_timeout_ms: int | None = None
 
 
 def _falsy(v: str | None) -> bool:
@@ -59,6 +62,8 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
     if _engine is None:
         s = settings or get_settings()
         url, connect_args = _build_connect_args(s.mysql_dsn)
+        if statement_timeout_ms and url.get_backend_name() == "mysql":
+            connect_args["init_command"] = f"SET SESSION max_execution_time={int(statement_timeout_ms)}"
         _engine = create_async_engine(
             url,
             pool_pre_ping=True,

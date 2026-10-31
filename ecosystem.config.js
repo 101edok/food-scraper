@@ -2,23 +2,30 @@
 // (repo checked out at ~/food-scraper, own .venv at ~/food-scraper/.venv).
 // Start/adopt: pm2 start ecosystem.config.js && pm2 save
 //
-// Один процесс = один магазин × один город. Прогон разовый: pm2 запускает его
-// при start и дальше по cron_restart; autorestart выключен, иначе pm2
-// перезапускал бы скрейпер сразу после выхода. Время cron — локальное время сервера.
-// Новый город: добавить строку в TARGETS (slug из src/food_scraper/cities.py),
-// сдвинув время, чтобы прогоны не шли одновременно.
+// На каждую сеть × город два процесса:
+//   food-scraper-<shop>-<city>       каждый день, 12 точек, разнесённых по районам (одни и те же);
+//   food-scraper-<shop>-<city>-full  раз в неделю: обновить справочник точек и обойти все.
+// Прогон разовый: pm2 запускает его при start и дальше по cron_restart; autorestart
+// выключен, иначе pm2 перезапускал бы скрейпер сразу после выхода. Время cron — время
+// сервера (Europe/Moscow). Полный прогон Москвы ~5 ч, поэтому в воскресенье ежедневного нет.
+// Новый город: строка в TARGETS (slug из src/food_scraper/cities.py) со сдвинутым временем.
 const TARGETS = [
-  { shop: "magnit", city: "moscow", cron: "0 4 * * *" },
+  { shop: "magnit", city: "moscow", daily: "0 4 * * 1-6", weekly: "0 1 * * 0" },
 ];
 
+const app = (name, args, cron) => ({
+  name,
+  cwd: "/home/gistrec/food-scraper",
+  script: "/home/gistrec/food-scraper/.venv/bin/food-scrape",
+  args,
+  interpreter: "none",
+  autorestart: false,
+  cron_restart: cron,
+});
+
 module.exports = {
-  apps: TARGETS.map(({ shop, city, cron }) => ({
-    name: `food-scraper-${shop}-${city}`,
-    cwd: "/home/gistrec/food-scraper",
-    script: "/home/gistrec/food-scraper/.venv/bin/food-scrape",
-    args: `run --shop ${shop} --city ${city}`,
-    interpreter: "none",
-    autorestart: false,
-    cron_restart: cron,
-  })),
+  apps: TARGETS.flatMap(({ shop, city, daily, weekly }) => [
+    app(`food-scraper-${shop}-${city}`, `run --shop ${shop} --city ${city} --stores 12`, daily),
+    app(`food-scraper-${shop}-${city}-full`, `run --shop ${shop} --city ${city} --all-stores --refresh-stores`, weekly),
+  ]),
 };

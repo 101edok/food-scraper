@@ -203,7 +203,7 @@ def _refresh_browser_session() -> None:
     _process_curl(text)
 
 
-@app.command(help="Прогон: один магазин × один город.")
+@app.command(help="Прогон: сеть магазинов × город, по нескольким точкам сети.")
 def run(
     shop: str = typer.Option("magnit", "--shop", help="magnit | lenta"),
     city: str = typer.Option("moscow", "--city", help=f"Город: {', '.join(CITIES)}"),
@@ -212,6 +212,13 @@ def run(
     ),
     limit: Optional[int] = typer.Option(
         None, "--limit", help="Максимум товаров на категорию"
+    ),
+    stores: int = typer.Option(
+        12, "--stores", help="Сколько точек сети обойти: разнесённые по районам, каждый день одни и те же"
+    ),
+    all_stores: bool = typer.Option(False, "--all-stores", help="Обойти все активные точки города"),
+    refresh_stores: bool = typer.Option(
+        False, "--refresh-stores", help="Перед прогоном обновить справочник точек (обход города сеткой)"
     ),
     workers: int = typer.Option(4, help="Параллельных запросов к магазину"),
     details_max_age_days: int = typer.Option(
@@ -237,6 +244,8 @@ def run(
         run_pipeline(
             shop,
             city,
+            stores=None if all_stores else stores,
+            refresh_stores=refresh_stores,
             category_id=category_id,
             limit=limit,
             workers=workers,
@@ -244,6 +253,20 @@ def run(
             details_limit=details_limit,
         )
     )
+
+
+@app.command("stores", help="Обновить справочник точек сети в городе (обход сеткой) и показать его.")
+def stores_cmd(
+    shop: str = typer.Option("magnit", "--shop", help="magnit | lenta"),
+    city: str = typer.Option("moscow", "--city", help=f"Город: {', '.join(CITIES)}"),
+    workers: int = typer.Option(4, help="Параллельных запросов к магазину"),
+) -> None:
+    from .pipeline.run import discover_stores
+
+    rows = asyncio.run(discover_stores(shop, city, workers=workers))
+    for r in sorted(rows, key=lambda r: r.code):
+        typer.echo(f"{r.code:>10}  type={r.store_type:<4} {r.address or ''}")
+    typer.echo(f"Активных точек: {len(rows)}")
 
 
 @app.command(
@@ -310,8 +333,8 @@ async def _stats_async(n: int) -> None:
         return
     for r in rows:
         typer.echo(
-            f"#{r.id}  {r.started_at}  {r.shop}/{r.city} store={r.store_code}  {r.status}  "
-            f"categories={r.categories_total} products={r.products_total} "
+            f"#{r.id}  {r.started_at}  {r.shop}/{r.city} stores={r.stores_total}  {r.status}  "
+            f"products={r.products_total} prices={r.prices_total} "
             f"details={r.details_total} errors={r.errors_total}"
         )
 

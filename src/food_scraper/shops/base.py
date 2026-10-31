@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import AsyncIterator, Protocol
 
-from ..cities import City
+from ..stores import StoreRow
 
 
 @dataclass(slots=True)
@@ -63,8 +63,11 @@ class Shop(Protocol):
     async def __aenter__(self) -> "Shop": ...
     async def __aexit__(self, *exc: object) -> None: ...
 
-    async def select_store(self, city: City) -> str:
-        """Выбрать магазин, чьи цены считаем ценами города. Возвращает store_code."""
+    async def find_stores(self, lat: float, lon: float) -> list[StoreRow]:
+        """Точки сети рядом с координатой — только форматы, каталог которых умеем читать."""
+
+    def use_store(self, store: StoreRow) -> None:
+        """Дальнейшие categories/iter_items/details идут в каталог этой точки."""
 
     async def categories(self) -> list[CategoryRow]: ...
 

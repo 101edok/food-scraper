@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import AsyncIterator
 
-from ...cities import City
 from ...config import Settings
+from ...stores import StoreRow
 from ..base import CategoryRow, DetailsRow, ItemRow
 from . import api
 from .http_client import LentaHttpClient
@@ -30,14 +30,20 @@ class Lenta:
         if self._client:
             await self._client.aclose()
 
-    async def select_store(self, city: City) -> str:
-        # Магазин Ленты задаётся поддоменом и режимом доставки из .env (см. recon).
-        if city.slug != self.settings.city_subdomain:
-            raise RuntimeError(
-                f"Лента настроена на {self.settings.city_subdomain!r}, а запрошен {city.slug!r}"
+    async def find_stores(self, lat: float, lon: float) -> list[StoreRow]:
+        # Магазин Ленты задаётся поддоменом и режимом доставки из .env (см. recon) —
+        # одна условная точка на город, без координат обхода.
+        return [
+            StoreRow(
+                code=f"{self.settings.city_subdomain}:{self.settings.delivery_mode}",
+                store_type=self.settings.delivery_mode,
+                lat=lat,
+                lon=lon,
             )
-        self.store_code = f"{self.settings.city_subdomain}:{self.settings.delivery_mode}"
-        return self.store_code
+        ]
+
+    def use_store(self, store: StoreRow) -> None:
+        self.store_code = store.code
 
     async def categories(self) -> list[CategoryRow]:
         rows = await api.fetch_categories(self._client)

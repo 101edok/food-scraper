@@ -4,13 +4,14 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Sequence
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
     Category,
+    Store,
     Price,
     PriceSnapshot,
     Product,
@@ -18,6 +19,7 @@ from .models import (
     ProductImage,
 )
 from .shops.base import CategoryRow, DetailsRow, ItemRow
+from .stores import StoreRow
 
 BATCH = 500
 
@@ -74,7 +76,7 @@ async def save_items(
     items: Sequence[ItemRow],
     now: datetime,
 ) -> int:
-    """Товары из листинга + цены города. Возвращает, у скольких цена изменилась."""
+    """Товары из листинга + цены точки store_code в городе. Возвращает, у скольких цена изменилась."""
     if not items:
         return 0
     # Один товар может встретиться в нескольких категориях одного батча.
@@ -113,7 +115,10 @@ async def save_items(
         for p in (
             await session.execute(
                 select(Price).where(
-                    Price.shop == shop, Price.city == city, Price.product_id.in_(ids)
+                    Price.shop == shop,
+                    Price.city == city,
+                    Price.store_code == store_code,
+                    Price.product_id.in_(ids),
                 )
             )
         ).scalars()
@@ -142,7 +147,7 @@ async def save_items(
             )
 
     price_cols = [
-        "store_code", "price_minor", "old_price_minor", "unit_price_minor",
+        "price_minor", "old_price_minor", "unit_price_minor",
         "unit_label", "in_stock", "seen_at", "run_id",
     ]
     await _upsert(
@@ -169,8 +174,7 @@ async def save_items(
     if snapshots:
         # Два прогона в одну секунду дают одинаковый ключ — оставляем последнюю цену.
         await _upsert(
-            session, PriceSnapshot, snapshots,
-            ["store_code", "price_minor", "old_price_minor", "in_stock"],
+            session, PriceSnapshot, snapshots, ["price_minor", "old_price_minor", "in_stock"],
         )
     return len(snapshots)
 
@@ -230,3 +234,44 @@ async def save_details(
             ["value"],
         )
 
+
+
+async def upsert_stores(
+    session: AsyncSession, *, shop: str, city: str, stores: Sequence[StoreRow], now: datetime
+) -> int:
+    """Справочник точек города. Те, что обход больше не нашёл, помечаем неактивными, но не удаляем:
+    на них ссылается история цен. Возвращает число деактивированных."""
+    if stores:
+        await _upsert(
+            session,
+            Store,
+            [
+                {
+                    "shop": shop, "code": s.code, "city": city, "store_type": s.store_type,
+                    "address": (s.address or "")[:512] or None, "lat": s.lat, "lon": s.lon,
+                    "is_active": True, "first_seen_at": now, "last_seen_at": now,
+                }
+                for s in stores
+            ],
+            ["city", "store_type", "address", "lat", "lon", "is_active", "last_seen_at"],
+        )
+    result = await session.execute(
+        update(Store)
+        .where(Store.shop == shop, Store.city == city, Store.is_active.is_(True), Store.last_seen_at < now)
+        .values(is_active=False)
+    )
+    return result.rowcount or 0
+
+
+async def load_stores(session: AsyncSession, *, shop: str, city: str) -> list[StoreRow]:
+    rows = await session.execute(
+        select(Store).where(Store.shop == shop, Store.city == city, Store.is_active.is_(True))
+    )
+    return [
+        StoreRow(
+            code=s.code, store_type=s.store_type, address=s.address,
+            lat=float(s.lat) if s.lat is not None else None,
+            lon=float(s.lon) if s.lon is not None else None,
+        )
+        for s in rows.scalars()
+    ]

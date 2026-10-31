@@ -1,7 +1,8 @@
 """Схема скрейпера магазинов. БД общая с edalle backend (recepter) — все таблицы с префиксом shop_.
 
 Ключи магазинных сущностей — (shop, id): id внешний, уникален только внутри магазина.
-Цена всегда привязана к городу: в разных городах один товар стоит по-разному.
+Цена привязана к конкретной точке сети (store_code) и всегда несёт город: внутри
+одного города точки продают по разным ценам, «цена города» считается по ним (min/медиана).
 """
 from __future__ import annotations
 
@@ -102,15 +103,35 @@ class ProductAttribute(Base):
     )
 
 
+class Store(Base):
+    """Точка сети с онлайн-каталогом. Справочник пополняет food-scrape stores (обход города сеткой)."""
+
+    __tablename__ = "shop_stores"
+
+    shop: Mapped[str] = mapped_column(SHOP, primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    city: Mapped[str] = mapped_column(CITY)
+    # Формат точки в терминах магазина (у Магнита store_type: 1 — «у дома», 10, 16 — другие)
+    store_type: Mapped[str] = mapped_column(String(16))
+    address: Mapped[str | None] = mapped_column(String(512))
+    lat: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    lon: Mapped[float | None] = mapped_column(Numeric(9, 6))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime)
+
+    __table_args__ = (Index("ix_shop_stores_city", "shop", "city", "is_active"),)
+
+
 class Price(Base):
-    """Текущая цена товара в городе — последняя увиденная."""
+    """Текущая цена товара в точке сети — последняя увиденная."""
 
     __tablename__ = "shop_prices"
 
     shop: Mapped[str] = mapped_column(SHOP, primary_key=True)
     product_id: Mapped[str] = mapped_column(EXT_ID, primary_key=True)
     city: Mapped[str] = mapped_column(CITY, primary_key=True)
-    store_code: Mapped[str] = mapped_column(String(32))
+    store_code: Mapped[str] = mapped_column(String(32), primary_key=True)
     price_minor: Mapped[int | None] = mapped_column(Integer)
     old_price_minor: Mapped[int | None] = mapped_column(Integer)
     # Для весовых — цена за unit_label (обычно кг)
@@ -126,19 +147,21 @@ class Price(Base):
             ondelete="CASCADE",
         ),
         Index("ix_shop_prices_city_price", "shop", "city", "in_stock", "price_minor"),
+        # Под внешний ключ на shop_products (см. миграцию 0002)
+        Index("ix_shop_prices_product", "shop", "product_id"),
     )
 
 
 class PriceSnapshot(Base):
-    """История: строка пишется только когда цена/наличие в городе изменились."""
+    """История: строка пишется только когда цена/наличие в точке изменились."""
 
     __tablename__ = "shop_price_snapshots"
 
     shop: Mapped[str] = mapped_column(SHOP, primary_key=True)
     product_id: Mapped[str] = mapped_column(EXT_ID, primary_key=True)
     city: Mapped[str] = mapped_column(CITY, primary_key=True)
+    store_code: Mapped[str] = mapped_column(String(32), primary_key=True)
     captured_at: Mapped[datetime] = mapped_column(DateTime, primary_key=True)
-    store_code: Mapped[str] = mapped_column(String(32))
     price_minor: Mapped[int | None] = mapped_column(Integer)
     old_price_minor: Mapped[int | None] = mapped_column(Integer)
     in_stock: Mapped[bool] = mapped_column(Boolean)
@@ -152,11 +175,14 @@ class ScrapeRun(Base):
     )
     shop: Mapped[str] = mapped_column(SHOP)
     city: Mapped[str] = mapped_column(CITY)
+    # Код точки, если прогон был по одной; при обходе нескольких — NULL, см. stores_total
     store_code: Mapped[str | None] = mapped_column(String(32))
     started_at: Mapped[datetime] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    stores_total: Mapped[int] = mapped_column(Integer, default=0)
     categories_total: Mapped[int] = mapped_column(Integer, default=0)
     products_total: Mapped[int] = mapped_column(Integer, default=0)
+    prices_total: Mapped[int] = mapped_column(Integer, default=0)
     details_total: Mapped[int] = mapped_column(Integer, default=0)
     errors_total: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default="running")

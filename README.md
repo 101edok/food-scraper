@@ -8,9 +8,11 @@
 | Магнит | работает | BFF фронта `magnit.ru/webgate`, антибота нет — см. [recon/magnit.md](recon/magnit.md) |
 | Лента | нужен RU-резидентный прокси | реверс `api-gateway`, Qrator режет IP дата-центров (russia-03 и finland-01 — 403) |
 
-Один прогон — один магазин × один город. Цена всегда хранится вместе с городом
-(`shop_prices`, `shop_price_snapshots`): для города выбирается магазин сети, и его цены
-считаются ценами города; код магазина пишется рядом (`store_code`).
+Один прогон — одна сеть × один город, по нескольким точкам сети. Цена хранится по
+точке (`store_code`) и всегда вместе с городом (`shop_prices`, `shop_price_snapshots`):
+внутри одного города точки продают по разным ценам (у Магнита в Москве — у 15–26% общих
+товаров), «цена города» считается по ним в админке (min / медиана). Точки — в справочнике
+`shop_stores`.
 
 ## Установка
 
@@ -25,11 +27,17 @@ food-scrape init-db             # alembic upgrade head → таблицы shop_*
 ## Прогон
 
 ```bash
-# smoke: одна категория, 20 товаров, 5 карточек
-food-scrape run --shop magnit --city moscow --category-id 63983 --limit 20 --details-limit 5
+# справочник точек города: обход сеткой ~2 км (Москва — ~490 точек, ~2 мин)
+food-scrape stores --shop magnit --city moscow
 
-# полный
-food-scrape run --shop magnit --city moscow
+# smoke: 2 точки, одна категория, 20 товаров, 5 карточек
+food-scrape run --shop magnit --city moscow --stores 2 --category-id 63983 --limit 20 --details-limit 5
+
+# ежедневный: 12 точек, разнесённых по районам (каждый день одни и те же)
+food-scrape run --shop magnit --city moscow --stores 12
+
+# еженедельный: обновить справочник и обойти все точки
+food-scrape run --shop magnit --city moscow --all-stores --refresh-stores
 
 # отчёт
 food-scrape stats
@@ -37,25 +45,31 @@ food-scrape stats
 
 Что делает прогон:
 
-1. Выбирает магазин сети рядом с центром города (`--city`, список — `src/food_scraper/cities.py`).
-2. Синхронизирует дерево категорий.
-3. Обходит листовые категории: товары и цены города. Цена пишется в `shop_prices`,
-   а в `shop_price_snapshots` — только если цена или наличие изменились.
-4. Дочитывает карточки (состав, КБЖУ, бренд, вес) только для новых товаров и тех,
-   чья карточка старше `--details-max-age-days` (30). Первый прогон по городу долгий,
-   следующие — в основном листинг.
+1. Берёт активные точки города из `shop_stores`. Справочник пуст или `--refresh-stores` —
+   обходит город сеткой (`cities.py`: центр и радиус), новые точки добавляет, пропавшие
+   помечает неактивными (история цен по ним остаётся).
+2. Выбирает точки: `--stores N` — N штук farthest-point выборкой от центра (детерминированно);
+   `--all-stores` — все.
+3. По каждой точке: дерево категорий, листовые категории — товары и цены точки. Цена пишется
+   в `shop_prices`, а в `shop_price_snapshots` — только если цена или наличие изменились.
+4. Дочитывает карточки (состав, КБЖУ, бренд, вес) один раз на сеть — только для новых
+   товаров и тех, чья карточка старше `--details-max-age-days` (30).
+
+Счётчики прогона (`shop_scrape_runs`) обновляются после каждой точки — в админке виден прогресс.
 
 ## Новый магазин
 
 Адаптер в `src/food_scraper/shops/<name>.py` с контрактом `shops/base.py::Shop`:
-`select_store(city)`, `categories()`, `iter_items(category_id)`, `details(item_id)`.
+`find_stores(lat, lon)`, `use_store(store)`, `categories()`, `iter_items(category_id)`,
+`details(item_id)`.
 Пайплайн, запись в БД и CLI общие. Зарегистрировать в `shops/base.py::get_shop`.
 
 ## Деплой на russia-03
 
 Скрейпер живёт рядом с edalle backend: отдельный checkout в `~/food-scraper`,
-свой `.venv`, по pm2-процессу на магазин × город (`ecosystem.config.js`,
-например `food-scraper-magnit-moscow`).
+свой `.venv`, по два pm2-процесса на сеть × город (`ecosystem.config.js`):
+`food-scraper-magnit-moscow` — каждый день кроме воскресенья в 04:00, 12 точек;
+`food-scraper-magnit-moscow-full` — в воскресенье в 01:00, справочник и все точки (~5 ч).
 
 Первый раз:
 
@@ -65,7 +79,7 @@ git clone git@github.com:101edok/food-scraper.git ~/food-scraper && cd ~/food-sc
 python3 -m venv .venv && .venv/bin/pip install -e .    # на сервере Python 3.12
 cp .env.example .env            # MYSQL_DSN → recepter, учётка backend
 .venv/bin/food-scrape db-check && .venv/bin/food-scrape init-db
-.venv/bin/food-scrape run --shop magnit --city moscow --category-id 63983 --limit 20   # smoke
+.venv/bin/food-scrape run --shop magnit --city moscow --stores 2 --category-id 63983 --limit 20   # smoke
 pm2 start ecosystem.config.js && pm2 save
 ```
 
@@ -77,7 +91,10 @@ ssh russia-03 'pm2 startOrReload ecosystem.config.js && pm2 save'   # restart с
 ```
 
 Прогоны по cron из `ecosystem.config.js` (время сервера). Логи:
-`pm2 logs food-scraper-magnit-moscow`, итоги: `food-scrape stats`.
+`pm2 logs food-scraper-magnit-moscow`, итоги: `food-scrape stats` или вкладка «Прогоны» в админке.
+
+БД — через WireGuard (`10.10.0.4`, finland-01): публичный `public.mysql.gistrec.cloud` с
+russia-03 теряет ~30% подключений по таймауту.
 
 ## Лента
 
@@ -113,7 +130,8 @@ alembic ведёт свою таблицу версий `shop_alembic_version` �
 ```
 src/food_scraper/
   config.py           pydantic-settings из .env
-  cities.py           города: slug, центр
+  cities.py           города: slug, центр, радиус обхода
+  stores.py           сетка обхода, выборка точек
   models.py           SQLAlchemy ORM (shop_*)
   db.py               async engine/session
   upsert.py           идемпотентная запись (MySQL / SQLite в тестах)

@@ -8,8 +8,8 @@ import httpx
 import structlog
 from aiolimiter import AsyncLimiter
 
-from ..cities import City
 from ..config import Settings
+from ..stores import StoreRow
 from .base import CategoryRow, DetailsRow, ItemRow
 
 log = structlog.get_logger(__name__)
@@ -17,9 +17,11 @@ log = structlog.get_logger(__name__)
 BASE_URL = "https://magnit.ru"
 API = f"{BASE_URL}/webgate"
 PAGE_SIZE = 50
-# Формат «Магнит у дома» с доставкой: есть во всех крупных городах.
-# Его store_type (1) годится и как storeType, и как catalogType — это цены на полке.
+# Точки с доставкой. Каталог умеем читать только у формата «Магнит у дома» (store_type 1):
+# его store_type годится и как storeType, и как catalogType — это цены на полке.
+# Форматы 10 и 16 тоже express, но с этими параметрами отдают пустой каталог — см. recon/magnit.md.
 STORE_DELIVERY_TYPE = "express"
+STORE_TYPES = {"1"}
 RETRY_STATUSES = {429, 500, 502, 503, 504}
 
 
@@ -84,43 +86,37 @@ class Magnit:
 
     @property
     def _catalog_params(self) -> dict[str, str]:
-        assert self.store_type is not None, "сначала select_store()"
+        assert self.store_type is not None, "сначала use_store()"
         return {"storetype": self.store_type, "catalogtype": self.store_type}
 
     # ------------------------------------------------------------------ store
-    async def select_store(self, city: City) -> str:
-        # В самом центре (у Кремля) доставки может не быть — тогда кольцо точек ~7 км вокруг.
-        points = [(city.lat, city.lon)] + [
-            (city.lat + dlat, city.lon + dlon)
-            for dlat, dlon in [(0.06, 0), (-0.06, 0), (0, 0.1), (0, -0.1),
-                               (0.045, 0.07), (-0.045, -0.07), (0.045, -0.07), (-0.045, 0.07)]
-        ]
-        shop = None
-        for lat, lon in points:
-            data = await self._request(
-                "GET", "/shops/v1/shop_by_point", params={"x": round(lat, 4), "y": round(lon, 4)}
-            )
-            shop = next(
-                (
-                    s
-                    for s in (data or {}).get("shops") or []
-                    if s.get("active") and s.get("delivery_type") == STORE_DELIVERY_TYPE
-                ),
-                None,
-            )
-            if shop:
-                break
-        if shop is None:
-            raise RuntimeError(f"Магнит: нет магазина {STORE_DELIVERY_TYPE} рядом с {city.name}")
-        self.store_code = str(shop["xml_id"])
-        self.store_type = str(shop["store_type"])
-        log.info(
-            "magnit_store_selected",
-            city=city.slug,
-            store_code=self.store_code,
-            address=shop.get("formatted_address"),
+    async def find_stores(self, lat: float, lon: float) -> list[StoreRow]:
+        data = await self._request(
+            "GET", "/shops/v1/shop_by_point", params={"x": round(lat, 5), "y": round(lon, 5)}
         )
-        return self.store_code
+        rows = []
+        for s in (data or {}).get("shops") or []:
+            store_type = str(s.get("store_type"))
+            if not s.get("active") or s.get("delivery_type") != STORE_DELIVERY_TYPE:
+                continue
+            if store_type not in STORE_TYPES:
+                continue
+            coords = s.get("coordinates") or {}
+            rows.append(
+                StoreRow(
+                    code=str(s["xml_id"]),
+                    store_type=store_type,
+                    address=s.get("formatted_address"),
+                    # У Магнита x — широта, y — долгота
+                    lat=coords.get("x"),
+                    lon=coords.get("y"),
+                )
+            )
+        return rows
+
+    def use_store(self, store: StoreRow) -> None:
+        self.store_code = store.code
+        self.store_type = store.store_type
 
     # ------------------------------------------------------------- categories
     async def categories(self) -> list[CategoryRow]:

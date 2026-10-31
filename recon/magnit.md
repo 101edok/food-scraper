@@ -25,8 +25,15 @@ Referer: https://magnit.ru/catalog/
 
 Магазин по точке: `GET /shops/v1/shop_by_point?x=<широта>&y=<долгота>` →
 `shops[]` с `delivery_type` (`express` — «Магнит у дома», `cosmetic`, …),
-`store_type` и `xml_id` (= `storeCode`). В точке у Кремля доставки нет — пустой
-список, поэтому адаптер пробует кольцо точек вокруг центра.
+`store_type` и `xml_id` (= `storeCode`): ближайшая точка каждого формата. В точке у
+Кремля доставки нет — пустой список. Ответ для одной точки нестабилен (то `774924`,
+то `707942`), поэтому точки собираются в справочник обходом города сеткой ~2 км:
+в Москве (радиус 25 км, 489 узлов) — 129 точек `express`/1, ещё 19 `express`/10,
+10 `express`/16 и 61 `cosmetic`.
+
+Ассортимент и цены различаются по точкам. Пять точек в разных районах Москвы:
+4 190–6 943 товара каждая, вместе 9 096; у общих товаров цена отличается у 15–26%.
+`pagination.limit` больше 50 — `400 validation_error (pagsize)`.
 
 Пара `catalogType`/`storeType` проверяется сервером (`422 invalid_service_pair`).
 Для `express` (store_type `1`) работают:
@@ -36,6 +43,9 @@ Referer: https://magnit.ru/catalog/
 | `1` / `1` | на полке — **берём эти** |
 | `3` / `express` | на полке (совпадают с 1/1) |
 | `2` / `express` | доставки, дороже (коктейль Neo: 169,99 против 129,99) |
+
+Форматы `express`/10 и `express`/16 с `catalogType=storeType=<тип>` отдают пустой
+каталог — пары для них не подобраны, в справочник не попадают.
 
 `POST /v1/stores-facade/search` тело так и не подобрано (всегда
 `query or geo_bounding_box or circle or favorites or cityFIASID is required`).

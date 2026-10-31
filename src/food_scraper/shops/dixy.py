@@ -14,7 +14,7 @@ from typing import Any, AsyncIterator
 import httpx
 import structlog
 from aiolimiter import AsyncLimiter
-from selectolax.parser import HTMLParser
+from selectolax.lexbor import LexborHTMLParser
 
 from ..config import Settings
 from ..stores import StoreRow, distance_km
@@ -245,7 +245,7 @@ _NUTRITION = {"Калории": "kcal", "Белки": "protein", "Жиры": "fa
 
 
 def parse_details(item_id: str, html: str) -> DetailsRow:
-    tree = HTMLParser(html)
+    tree = LexborHTMLParser(html)
     row = DetailsRow(id=item_id)
     for holder in tree.css("div.detail-data__holder"):
         title = holder.css_first("span.title")

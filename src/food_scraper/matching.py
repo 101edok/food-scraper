@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -157,20 +158,23 @@ async def backfill_packs() -> int:
     """Фасовка у товаров, сохранённых до её появления (миграция 0003): из названия, у весовых — 1 кг."""
     from .quantity import GRAM, parse_pack
 
-    filled = 0
+    # Одинаковых фасовок мало (1 кг, 900 мл, 10 шт), поэтому обновляем пачкой по каждой: «WHERE id IN (...)»
+    groups: dict[tuple[str, float, str], list[str]] = defaultdict(list)
     async with session_scope() as session:
         rows = (await session.execute(
             select(Product.shop, Product.id, Product.name, Product.is_weighted).where(Product.net_quantity.is_(None))
         )).all()
         for shop, product_id, name, is_weighted in rows:
             pack = (1000.0, GRAM) if is_weighted else ((p.amount, p.unit) if (p := parse_pack(name)) else None)
-            if pack is None:
-                continue
-            await session.execute(
-                Product.__table__.update().where(Product.shop == shop, Product.id == product_id)
-                .values(net_quantity=pack[0], net_unit=pack[1])
-            )
-            filled += 1
+            if pack is not None:
+                groups[(shop, pack[0], pack[1])].append(product_id)
+        for (shop, amount, unit), ids in groups.items():
+            for i in range(0, len(ids), 1000):
+                await session.execute(
+                    Product.__table__.update().where(Product.shop == shop, Product.id.in_(ids[i:i + 1000]))
+                    .values(net_quantity=amount, net_unit=unit)
+                )
+    filled = sum(len(ids) for ids in groups.values())
     log.info("packs_backfilled", filled=filled, without=len(rows) - filled)
     return filled
 
@@ -210,7 +214,7 @@ async def match_all(now: datetime) -> dict[str, int]:
                         status="auto", created_at=now, updated_at=now,
                     ))
                     stats["inserted"] += 1
-                elif old.status == "auto":
+                elif old.status == "auto" and float(old.score or 0) != c.score:
                     await session.execute(
                         IngredientMatch.__table__.update()
                         .where(IngredientMatch.ingredient_id == ingredient_id,

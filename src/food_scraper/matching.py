@@ -153,8 +153,31 @@ def best_candidates(
     return result
 
 
+async def backfill_packs() -> int:
+    """Фасовка у товаров, сохранённых до её появления (миграция 0003): из названия, у весовых — 1 кг."""
+    from .quantity import GRAM, parse_pack
+
+    filled = 0
+    async with session_scope() as session:
+        rows = (await session.execute(
+            select(Product.shop, Product.id, Product.name, Product.is_weighted).where(Product.net_quantity.is_(None))
+        )).all()
+        for shop, product_id, name, is_weighted in rows:
+            pack = (1000.0, GRAM) if is_weighted else ((p.amount, p.unit) if (p := parse_pack(name)) else None)
+            if pack is None:
+                continue
+            await session.execute(
+                Product.__table__.update().where(Product.shop == shop, Product.id == product_id)
+                .values(net_quantity=pack[0], net_unit=pack[1])
+            )
+            filled += 1
+    log.info("packs_backfilled", filled=filled, without=len(rows) - filled)
+    return filled
+
+
 async def match_all(now: datetime) -> dict[str, int]:
     """Пересчитать auto-сопоставления для всех ингредиентов и сетей."""
+    await backfill_packs()
     async with session_scope() as session:
         ingredients = (await session.execute(text("SELECT id, name FROM ingredients"))).all()
         # Минимальная цена товара по всем точкам — для выбора выгодных при равной оценке

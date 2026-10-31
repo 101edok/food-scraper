@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     proxy_url: str | None = Field(default=None, alias="PROXY_URL")
     user_agent: str | None = Field(default=None, alias="USER_AGENT")
+    # Алерты о прогонах и качестве данных в Telegram; без них — только в лог
+    alert_telegram_token: str | None = Field(default=None, alias="ALERT_TELEGRAM_TOKEN")
+    alert_telegram_chat_id: str | None = Field(default=None, alias="ALERT_TELEGRAM_CHAT_ID")
 
     @property
     def base_url(self) -> str:

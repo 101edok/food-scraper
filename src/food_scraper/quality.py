@@ -1,0 +1,115 @@
+"""Ежедневная проверка данных (food-scrape check): устаревание, нулевые цены, выбросы цены за единицу,
+товары без фасовки. Результат перезаписывает shop_quality_issues; сводка с ошибками — в Telegram.
+"""
+from __future__ import annotations
+
+import statistics
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+import structlog
+from sqlalchemy import case, delete, func, select
+
+from . import alerts
+from .db import session_scope
+from .models import Price, Product, QualityIssue, ScrapeRun
+
+log = structlog.get_logger(__name__)
+
+STALE_AFTER = timedelta(hours=48)
+OUTLIER_FACTOR = 10  # цена за кг/л в 10 раз выше или ниже медианы категории
+OUTLIER_MIN_CATEGORY = 5
+NO_PACK_SHARE = 0.3  # доля товаров без фасовки, после которой цену за кг не посчитать для заметной части
+RECENT_RUNS = timedelta(days=14)
+
+
+def outliers(rows: list[tuple[str, str | None, str, float, str]]) -> list[tuple[str, str, float, float]]:
+    """rows: (shop, category_id, product_id, цена за единицу, единица). → (shop, product_id, цена, медиана)."""
+    groups: dict[tuple[str, str, str], list[tuple[str, float]]] = defaultdict(list)
+    for shop, category_id, product_id, unit_price, unit in rows:
+        if category_id and unit_price > 0:
+            groups[(shop, category_id, unit)].append((product_id, unit_price))
+    found = []
+    for (shop, _, _), items in groups.items():
+        if len(items) < OUTLIER_MIN_CATEGORY:
+            continue
+        median = statistics.median(p for _, p in items)
+        for product_id, price in items:
+            if price > median * OUTLIER_FACTOR or price < median / OUTLIER_FACTOR:
+                found.append((shop, product_id, price, median))
+    return found
+
+
+async def check_all(now: datetime) -> dict[str, int]:
+    issues: list[QualityIssue] = []
+
+    def issue(shop, kind, severity, message, city=None, product_id=None):
+        issues.append(QualityIssue(shop=shop, city=city, product_id=product_id, kind=kind, severity=severity,
+                                   message=message[:1024], detected_at=now))
+
+    async with session_scope() as session:
+        # Устаревание: сеть × город, у которых были прогоны за 2 недели, но успешного — давно нет
+        recent = (await session.execute(
+            select(ScrapeRun.shop, ScrapeRun.city).where(ScrapeRun.started_at > now - RECENT_RUNS).distinct()
+        )).all()
+        for shop, city in recent:
+            last_ok = await session.scalar(select(func.max(ScrapeRun.finished_at)).where(
+                ScrapeRun.shop == shop, ScrapeRun.city == city, ScrapeRun.status == "ok"))
+            if last_ok is None or last_ok < now - STALE_AFTER:
+                when = f"последний успешный прогон {last_ok:%Y-%m-%d %H:%M} UTC" if last_ok else "успешных прогонов нет"
+                issue(shop, "stale", "error", f"Данные старше 48 ч: {when}", city=city)
+
+        for shop, city, product_id, price in (await session.execute(
+            select(Price.shop, Price.city, Price.product_id, Price.price_minor)
+            .where(Price.price_minor <= 0).distinct()
+        )).all():
+            issue(shop, "zero_price", "error", f"Цена {price} коп.", city=city, product_id=product_id)
+
+        # Выбросы цены за единицу внутри категории (минимальная цена товара по точкам)
+        min_price = select(Price.shop, Price.product_id, func.min(Price.price_minor).label("price")) \
+            .where(Price.price_minor > 0).group_by(Price.shop, Price.product_id).subquery()
+        rows = (await session.execute(
+            select(Product.shop, Product.category_id, Product.id, min_price.c.price,
+                   Product.net_quantity, Product.net_unit)
+            .join(min_price, (min_price.c.shop == Product.shop) & (min_price.c.product_id == Product.id))
+            .where(Product.net_quantity > 0)
+        )).all()
+        unit_rows = [(shop, cat, pid, price / float(qty), unit) for shop, cat, pid, price, qty, unit in rows]
+        for shop, product_id, price, median in outliers(unit_rows):
+            issue(shop, "price_outlier", "warning",
+                  f"Цена за единицу в {price / median:.1f} раза от медианы категории "
+                  f"({price / 100:.4f} ₽ против {median / 100:.4f} ₽) — проверьте фасовку",
+                  product_id=product_id)
+
+        # Доля товаров без фасовки по сети
+        for shop, total, without in (await session.execute(
+            select(Product.shop, func.count(), func.sum(case((Product.net_quantity.is_(None), 1), else_=0)))
+            .group_by(Product.shop)
+        )).all():
+            without = int(without or 0)
+            if total and without / total > NO_PACK_SHARE:
+                issue(shop, "no_pack", "warning",
+                      f"Без фасовки {without} из {total} товаров ({without / total:.0%}): "
+                      f"для них нет цены за кг/л и они не попадают в стоимость рецептов")
+
+        await session.execute(delete(QualityIssue))
+        session.add_all(issues)
+
+    counts = defaultdict(int)
+    for i in issues:
+        counts[f"{i.severity}:{i.kind}"] += 1
+    log.info("quality_done", **counts)
+
+    errors = [i for i in issues if i.severity == "error"]
+    if errors:
+        lines = [f"• {i.shop}/{i.city or '—'}: {i.message}" for i in errors if i.kind == "stale"]
+        other = len(errors) - len(lines)
+        text = "⚠️ Проверка данных food-scraper\n" + "\n".join(lines[:10])
+        if other:
+            text += f"\nЕщё ошибок: {other} (нулевые цены и др.)"
+        text += "\nПодробнее — admin.edalle.ru/shop/quality"
+        try:
+            await alerts.send(text)
+        except Exception as e:
+            log.warning("alert_failed", err=str(e))
+    return dict(counts)

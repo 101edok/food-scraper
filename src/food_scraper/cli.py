@@ -269,6 +269,45 @@ def stores_cmd(
     typer.echo(f"Активных точек: {len(rows)}")
 
 
+@app.command("match", help="Сопоставить ингредиенты рецептов с товарами сетей (status=auto).")
+def match_cmd() -> None:
+    from .matching import match_all
+    from .pipeline.run import utcnow
+
+    typer.echo(asyncio.run(match_all(utcnow())))
+
+
+@app.command("recipe-costs", help="Пересчитать стоимость рецептов по сетям и городам.")
+def recipe_costs_cmd() -> None:
+    from .pipeline.run import utcnow
+    from .recipe_costs import compute_all
+
+    typer.echo(asyncio.run(compute_all(utcnow())))
+
+
+@app.command("check", help="Проверка данных: устаревание, нулевые цены, выбросы, фасовка; ошибки — в Telegram.")
+def check_cmd() -> None:
+    from .pipeline.run import utcnow
+    from .quality import check_all
+
+    typer.echo(asyncio.run(check_all(utcnow())))
+
+
+@app.command("postprocess", help="После прогонов: match → recipe-costs → check.")
+def postprocess_cmd() -> None:
+    from .matching import match_all
+    from .pipeline.run import utcnow
+    from .quality import check_all
+    from .recipe_costs import compute_all
+
+    async def go() -> None:
+        typer.echo(f"match: {await match_all(utcnow())}")
+        typer.echo(f"recipe-costs: {await compute_all(utcnow())}")
+        typer.echo(f"check: {await check_all(utcnow())}")
+
+    asyncio.run(go())
+
+
 @app.command(
     help="Лента: сетевая диагностика — внешний IP и ответ Ленты через PROXY_URL.",
     rich_help_panel="Лента",

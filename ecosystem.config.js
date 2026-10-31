@@ -32,8 +32,12 @@ const app = (name, args, cron) => ({
 });
 
 module.exports = {
-  apps: TARGETS.flatMap(({ shop, city, daily, weekly, stores = 12, workers = 4 }) => [
-    app(`food-scraper-${shop}-${city}`, `run --shop ${shop} --city ${city} --stores ${stores} --workers ${workers}`, daily),
-    app(`food-scraper-${shop}-${city}-full`, `run --shop ${shop} --city ${city} --all-stores --refresh-stores --workers ${workers}`, weekly),
-  ]),
+  apps: [
+    ...TARGETS.flatMap(({ shop, city, daily, weekly, stores = 12, workers = 4 }) => [
+      app(`food-scraper-${shop}-${city}`, `run --shop ${shop} --city ${city} --stores ${stores} --workers ${workers}`, daily),
+      app(`food-scraper-${shop}-${city}-full`, `run --shop ${shop} --city ${city} --all-stores --refresh-stores --workers ${workers}`, weekly),
+    ]),
+    // После утренних прогонов: сопоставление ингредиентов → стоимость рецептов → проверка данных и алерты
+    app("food-scraper-postprocess", "postprocess", "0 9 * * *"),
+  ],
 };

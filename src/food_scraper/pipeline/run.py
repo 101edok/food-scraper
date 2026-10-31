@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import structlog
 
+from .. import alerts
 from ..cities import City, get_city
 from ..db import session_scope
 from ..models import ScrapeRun
@@ -128,6 +129,10 @@ async def run(
     finally:
         await _save_progress(run_id, stats, store_code=store_code, status=status, finished=True)
         log.info("run_done", status=status, **stats)
+        try:
+            await alerts.on_run_finished(run_id)
+        except Exception as e:  # алерт не должен ронять прогон
+            log.warning("alert_failed", err=str(e))
         structlog.contextvars.unbind_contextvars("run_id", "shop", "city")
     return run_id
 

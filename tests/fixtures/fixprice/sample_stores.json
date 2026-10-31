@@ -1,0 +1,123 @@
+{
+ "store_list": {
+  "request": "GET https://api.fix-price.com/buyer/v1/store?cityId=40 (без cityId — все 7239 точек, 3.3 MB)",
+  "response": [
+   {
+    "id": 7191,
+    "pfm": "8242",
+    "address": "г Казань, ул Белинского, зд 18",
+    "shortAddress": "ул Белинского, зд 18",
+    "latitude": 55.854813,
+    "longitude": 49.074094,
+    "isActive": true,
+    "cityId": 40,
+    "canPayCard": true,
+    "canPickup": true,
+    "warehouse": false,
+    "info": null,
+    "withVariableProduct": false,
+    "scheduleWeekdays": "08:30-21:00",
+    "scheduleSaturday": "08:30-21:00",
+    "scheduleSunday": "08:30-21:00",
+    "temporarilyClosed": false,
+    "metroStations": [],
+    "workTime": "Открыто до 21:00"
+   },
+   {
+    "id": 11950,
+    "pfm": "H572",
+    "address": "г Казань, ул Генерала Махмута Гареева, д 9А",
+    "shortAddress": "ул Генерала Махмута Гареева, д 9А",
+    "latitude": 55.859004,
+    "longitude": 48.906571,
+    "isActive": true,
+    "cityId": 40,
+    "canPayCard": true,
+    "canPickup": true,
+    "warehouse": false,
+    "info": null,
+    "withVariableProduct": false,
+    "scheduleWeekdays": "09:00-21:00",
+    "scheduleSaturday": "09:00-21:00",
+    "scheduleSunday": "09:00-21:00",
+    "temporarilyClosed": false,
+    "metroStations": [],
+    "workTime": "Открыто до 21:00"
+   }
+  ]
+ },
+ "balance": {
+  "request": "GET https://api.fix-price.com/buyer/v1/store/balance/1011012  (x-city: 3) -> 352 точки Москвы",
+  "response": [
+   {
+    "id": 649,
+    "pfm": "2019",
+    "address": "г Москва, ул Инженерная, влд 5",
+    "shortAddress": "ул Инженерная, влд 5",
+    "latitude": 55.879071,
+    "longitude": 37.579412,
+    "isActive": true,
+    "cityId": 3,
+    "canPayCard": true,
+    "canPickup": true,
+    "warehouse": false,
+    "info": null,
+    "withVariableProduct": false,
+    "scheduleWeekdays": "09:00-21:00",
+    "scheduleSaturday": "09:00-21:00",
+    "scheduleSunday": "09:00-21:00",
+    "workTime": "Открыто до 21:00",
+    "metroStations": [
+     {
+      "id": 131695,
+      "name": "Бескудниково",
+      "lineColor": "F5A528",
+      "latitude": 55.882713,
+      "longitude": 37.567768
+     }
+    ],
+    "temporarilyClosed": false,
+    "count": 42
+   },
+   {
+    "id": 9544,
+    "pfm": "D673",
+    "address": "г.Москва, ул.Семёна Гордого, д.7",
+    "shortAddress": "ул.Семёна Гордого, д.7",
+    "latitude": 55.542296,
+    "longitude": 37.15387,
+    "isActive": true,
+    "cityId": 3,
+    "canPayCard": true,
+    "canPickup": true,
+    "warehouse": false,
+    "info": null,
+    "withVariableProduct": false,
+    "scheduleWeekdays": "09:00-21:00",
+    "scheduleSaturday": "09:00-21:00",
+    "scheduleSunday": "09:00-21:00",
+    "workTime": "Открыто до 21:00",
+    "metroStations": [],
+    "temporarilyClosed": false,
+    "count": 36
+   }
+  ]
+ },
+ "city": {
+  "request": "GET https://api.fix-price.com/buyer/v1/location/city/40",
+  "response": {
+   "id": 40,
+   "name": "Казань",
+   "title": "Казань",
+   "regionTitle": "Республика Татарстан",
+   "longitude": 49.106414,
+   "latitude": 55.796127,
+   "kladr": null,
+   "fiasid": "93b3df57-4c89-44df-ac42-96f05e9cd3b9",
+   "fias": "93b3df57-4c89-44df-ac42-96f05e9cd3b9",
+   "addressId": "",
+   "prefix": "г",
+   "countryId": 2
+  }
+ }
+}

@@ -99,4 +99,8 @@ def get_shop(name: str) -> Shop:
         from .dixy import Dixy
 
         return Dixy(s)
-    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, dixy, lenta")
+    if name == "fixprice":
+        from .fixprice import FixPrice
+
+        return FixPrice(s)
+    raise ValueError(f"Неизвестный магазин {name!r}. Есть: magnit, dixy, fixprice, lenta")

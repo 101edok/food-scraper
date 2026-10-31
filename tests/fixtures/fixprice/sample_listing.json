@@ -1,0 +1,138 @@
+{
+ "request": {
+  "method": "POST",
+  "url": "https://api.fix-price.com/buyer/v1/product/in/produkty-i-napitki/molochnye-produkty?page=2&limit=24&sort=sold&location=https:%2F%2Ffix-price.com%2Fcatalog%2Fprodukty-i-napitki%2Fmolochnye-produkty%3Fpage%3D2&referer=https:%2F%2Ffix-price.com%2Fcatalog%2Fprodukty-i-napitki%2Fmolochnye-produkty",
+  "headers": {
+   "x-order-type": "combined",
+   "x-key": "ZGpXN3UxSitBS21udEtPK3ZkTzBEQT09OjpuT2lFTW5POFRLbmViSlVVa3MrL1B3PT0=:39d861928d9df1557a00171b6ab9047f",
+   "x-city": "3",
+   "x-language": "ru",
+   "x-client-route": "/catalog/produkty-i-napitki/molochnye-produkty?page=2",
+   "accept": "application/json, text/plain, */*",
+   "content-type": "application/json",
+   "x-logged": ""
+  },
+  "body": {
+   "category": "produkty-i-napitki/molochnye-produkty",
+   "brand": [],
+   "badge": [],
+   "price": [],
+   "isDividedPrice": false,
+   "isSpecialPrice": false
+  }
+ },
+ "response_headers_note": "x-count: 29",
+ "response": [
+  {
+   "id": 1011012,
+   "sku": "1011012",
+   "title": "Сливки питьевые стерилизованные, Домик в деревне, 10%, 200 г",
+   "isFresh": false,
+   "isNew": false,
+   "isPromo": false,
+   "adult": false,
+   "isSeason": false,
+   "isHit": false,
+   "isQRMark": false,
+   "forbidden": false,
+   "active": true,
+   "image": 686023278,
+   "images": [
+    {
+     "id": 686023278,
+     "title": null,
+     "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia.jpg"
+    }
+   ],
+   "resources": [
+    {
+     "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia.jpg",
+     "videoType": null,
+     "link": null
+    }
+   ],
+   "unit": null,
+   "specialPrice": null,
+   "price": "69.00",
+   "unitPrice": "",
+   "minPrice": "69.00",
+   "maxPrice": "69.00",
+   "variantCount": 1,
+   "variantId": null,
+   "url": "produkty-i-napitki/p-1011012-slivki-pitevye-sterilizovannye-domik-v-derevne-10-200-g",
+   "inStock": 28,
+   "brand": {
+    "id": 1339,
+    "title": "Домик в деревне"
+   },
+   "category": {
+    "id": 2004,
+    "title": "Продукты и напитки",
+    "parentCategory": null
+   },
+   "badges": [],
+   "availabilityType": "primary",
+   "feedback": {
+    "rating": 5,
+    "ratings": {
+     "count": 1,
+     "display": "1"
+    }
+   }
+  },
+  {
+   "id": 1900418,
+   "sku": "1900418",
+   "title": "Шоколад молочный с протеином, семенами чиа и льна \"Sport\", Bucheron, 70 г",
+   "isFresh": false,
+   "isNew": false,
+   "isPromo": false,
+   "adult": false,
+   "isSeason": false,
+   "isHit": false,
+   "isQRMark": false,
+   "forbidden": false,
+   "active": true,
+   "image": 686042322,
+   "images": [
+    {
+     "id": 686042322,
+     "title": null,
+     "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/bit/_marketplace/images/origin/9e/9e990c01956250c6c61e50ae91e1d56a.jpg"
+    }
+   ],
+   "resources": [
+    {
+     "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/bit/_marketplace/images/origin/9e/9e990c01956250c6c61e50ae91e1d56a.jpg",
+     "videoType": null,
+     "link": null
+    }
+   ],
+   "unit": null,
+   "specialPrice": null,
+   "price": "116.00",
+   "unitPrice": "",
+   "minPrice": "116.00",
+   "maxPrice": "116.00",
+   "variantCount": 1,
+   "variantId": null,
+   "url": "produkty-i-napitki/p-1900418-shokolad-molochnyy-s-proteinom-semenami-chia-i-lna-port-ucheron-70-g",
+   "inStock": 14,
+   "brand": null,
+   "category": {
+    "id": 2004,
+    "title": "Продукты и напитки",
+    "parentCategory": null
+   },
+   "badges": [],
+   "availabilityType": "primary",
+   "feedback": {
+    "rating": 0,
+    "ratings": {
+     "count": 0,
+     "display": null
+    }
+   }
+  }
+ ]
+}

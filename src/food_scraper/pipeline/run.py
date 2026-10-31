@@ -64,6 +64,9 @@ async def run(
     try:
         async with shop:
             registry = await _registry(shop, city, refresh=refresh_stores, workers=workers)
+            if getattr(shop, "city_wide_prices", False):
+                # Цена зависит только от города (Fix Price) — одна точка, ближайшая к центру
+                stores = 1
             chosen = registry if stores is None else spread_sample(registry, stores, (city.lat, city.lon))
             if not chosen:
                 raise RuntimeError(f"{shop.name}: в {city.name} нет точек с онлайн-каталогом")
@@ -201,8 +204,10 @@ async def _scrape_store(
         log.info("categories_synced", total=len(cats), leaves=len(leaves))
 
         # Внутри точки товар лежит в нескольких категориях (плюс промо-подборки) — цену пишем один раз.
-        # Проверка и добавление идут без await между ними, так что гонок между задачами нет.
-        seen: set[str] = set()
+        # Исключение: товар уже встречался без категории, а теперь пришёл из листа с ней (Fix Price:
+        # корень раздела и его листья) — пишем ещё раз, чтобы сохранить категорию.
+        # Проверка и запись в seen идут без await между ними, так что гонок между задачами нет.
+        seen: dict[str, bool] = {}
         # Листья, которые магазин отдал в листинге (Дикси): дерево без id, листья узнаём из товаров
         listed_categories: dict[str, CategoryRow] = {}
         sem = asyncio.Semaphore(workers)
@@ -211,12 +216,14 @@ async def _scrape_store(
             async with sem:
                 try:
                     fresh: list[ItemRow] = []
-                    n = 0
+                    n = new_prices = 0
                     async for item in shop.iter_items(cid):
                         n += 1
-                        if item.id not in seen:
-                            seen.add(item.id)
+                        had_category = seen.get(item.id)
+                        if had_category is None or (not had_category and item.category_id):
+                            seen[item.id] = bool(item.category_id)
                             fresh.append(item)
+                            new_prices += had_category is None
                         if limit is not None and n >= limit:
                             break
                     async with session_scope() as session:
@@ -231,7 +238,7 @@ async def _scrape_store(
                                 id=item.category_id, parent_id=cid, name=item.category_name or "", level=1,
                             )
                     stats["categories"] += 1
-                    stats["prices"] += len(fresh)
+                    stats["prices"] += new_prices
                     log.debug("category_done", category_id=cid, items=n, new=len(fresh), price_changed=changed)
                 except Exception as e:
                     stats["errors"] += 1

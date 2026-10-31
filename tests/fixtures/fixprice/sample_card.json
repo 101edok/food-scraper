@@ -1,0 +1,154 @@
+{
+ "request": {
+  "method": "GET",
+  "url": "https://api.fix-price.com/buyer/v1/product/sku/1011012",
+  "headers": {
+   "x-city": "3",
+   "x-language": "ru"
+  }
+ },
+ "response": {
+  "id": 1011012,
+  "title": "Сливки питьевые стерилизованные, Домик в деревне, 10%, 200 г",
+  "sku": "1011012",
+  "category": 2004,
+  "isFresh": false,
+  "isNew": false,
+  "isPromo": false,
+  "isSeason": false,
+  "isHit": false,
+  "isQRMark": false,
+  "image": 686023278,
+  "images": [
+   {
+    "id": 686023278,
+    "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia.jpg",
+    "title": null
+   }
+  ],
+  "adult": false,
+  "description": "Сливки питьевые стерилизованные, Домик в деревне, имеют нежный вкус. Можно добавлять в кофе и другие напитки, использовать для приготовления соусов, крем-супов, омлетов и других блюд. Жирность: 10%. Масса нетто: 200 г.",
+  "video": null,
+  "forbidden": false,
+  "active": true,
+  "unitType": null,
+  "unitPrice": "",
+  "properties": [
+   {
+    "id": 12,
+    "alias": "prodCountry",
+    "value": "Россия",
+    "title": "Страна производства"
+   }
+  ],
+  "extraDescriptions": [
+   {
+    "id": 0,
+    "alias": "composition",
+    "value": "сливки нормализованные",
+    "title": "Состав"
+   },
+   {
+    "id": 1,
+    "alias": "nutritionalValue",
+    "value": "Пищевая ценность на 100г. Продукта: белки 2.8г.; жиры 10г.; углеводы 4.3г. Энергетическая ценность: 118 ккал.",
+    "title": "Пищевая ценность"
+   },
+   {
+    "id": 2,
+    "alias": "nutritionalValueSeparated",
+    "value": {
+     "description": "Пищевая ценность на 100г",
+     "energyValue": "118",
+     "protein": "2.8",
+     "fats": "10",
+     "carbohydrates": "4.3"
+    },
+    "title": "Пищевая ценность с разбивкой по элементам"
+   },
+   {
+    "id": 3,
+    "alias": "manufacturerAddress",
+    "value": "127591 г.Москва, Дмитровское шоссе, д.108",
+    "title": "Адрес производителя"
+   }
+  ],
+  "url": "produkty-i-napitki/p-1011012-slivki-pitevye-sterilizovannye-domik-v-derevne-10-200-g",
+  "brand": {
+   "id": 1339,
+   "src": "",
+   "url": null,
+   "alias": "",
+   "login": null,
+   "title": "Домик в деревне",
+   "updated_at": null,
+   "isSTM": false,
+   "isFavorite": false
+  },
+  "resources": [
+   {
+    "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia.jpg",
+    "videoType": null,
+    "link": null
+   }
+  ],
+  "variants": [
+   {
+    "id": 158803,
+    "title": "Вариант - 10%",
+    "width": 40,
+    "height": 80,
+    "length": 70,
+    "barcode": "4607025396833",
+    "properties": [
+     {
+      "id": 9,
+      "alias": "variant",
+      "value": "10%",
+      "title": "Вариант"
+     }
+    ],
+    "count": 11,
+    "price": "69.00",
+    "fixPrice": "69.00",
+    "image": 546095271,
+    "images": [
+     {
+      "id": 546095271,
+      "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia_1.jpg",
+      "title": null
+     }
+    ],
+    "dimensions": {
+     "units": {
+      "length": "мм",
+      "height": "мм",
+      "width": "мм",
+      "weight": "г"
+     },
+     "width": 40,
+     "height": 80,
+     "weight": 210,
+     "length": 70,
+     "isPackage": true
+    },
+    "unitPrice": "",
+    "resources": [
+     {
+      "src": "https://img.fix-price.com/insecure/rs:fit:800:800/plain/pim/images/_default_upload_bucket/1011012_Slivki_Domik_v_derevne_10_200g_BZMZ_1_kopia_1.jpg",
+      "videoType": null,
+      "link": null
+     }
+    ]
+   }
+  ],
+  "informers": [
+   {
+    "alias": "loyaltyProgram"
+   }
+  ],
+  "bonusCommunicationEnable": false,
+  "badges": [],
+  "availabilityType": "primary"
+ }
+}

@@ -43,6 +43,9 @@ class ItemRow:
     # Раздел над листом, если магазин отдаёт и его (ВкусВилл)
     category_parent_id: str | None = None
     category_parent_name: str | None = None
+    # Фасовка, если магазин отдаёт её отдельным полем (ВкусВилл); иначе её разбирают из названия
+    net_quantity: float | None = None
+    net_unit: str | None = None  # g | ml | pcs
 
 
 @dataclass(slots=True)

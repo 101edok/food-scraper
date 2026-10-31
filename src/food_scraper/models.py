@@ -64,6 +64,9 @@ class Product(Base):
     fat: Mapped[float | None] = mapped_column(Numeric(6, 2))
     carbs: Mapped[float | None] = mapped_column(Numeric(6, 2))
     weight_g: Mapped[int | None] = mapped_column(Integer)
+    # Фасовка для цены за кг/л/шт: из названия («900 мл», «6х45г») или из API; у весовых — 1000 g (цена за кг)
+    net_quantity: Mapped[float | None] = mapped_column(Numeric(10, 3))
+    net_unit: Mapped[str | None] = mapped_column(String(4))  # g | ml | pcs
     is_weighted: Mapped[bool] = mapped_column(Boolean, default=False)
     is_adult: Mapped[bool] = mapped_column(Boolean, default=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime)
@@ -193,3 +196,63 @@ class ScrapeRun(Base):
 Index("ix_shop_categories_parent", Category.shop, Category.parent_id)
 Index("ix_shop_products_category", Product.shop, Product.category_id)
 Index("ix_shop_products_brand", Product.brand)
+
+
+class IngredientMatch(Base):
+    """Ингредиент рецепта edalle (таблица ingredients backend) → товар сети.
+
+    auto — подобран food-scrape match, approved/rejected — решение модератора в админке.
+    Отклонённые match больше не предлагает.
+    """
+
+    __tablename__ = "shop_ingredient_matches"
+
+    ingredient_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shop: Mapped[str] = mapped_column(SHOP, primary_key=True)
+    product_id: Mapped[str] = mapped_column(EXT_ID, primary_key=True)
+    score: Mapped[float] = mapped_column(Numeric(5, 3))
+    status: Mapped[str] = mapped_column(String(16), default="auto")
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    updated_at: Mapped[datetime] = mapped_column(DateTime)
+
+    __table_args__ = (
+        Index("ix_shop_ingredient_matches_product", "shop", "product_id"),
+        Index("ix_shop_ingredient_matches_status", "ingredient_id", "status"),
+    )
+
+
+class RecipeCost(Base):
+    """Оценка стоимости рецепта (videos backend) в сети и городе — пересчитывает food-scrape recipe-costs."""
+
+    __tablename__ = "shop_recipe_costs"
+
+    video_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shop: Mapped[str] = mapped_column(SHOP, primary_key=True)
+    city: Mapped[str] = mapped_column(CITY, primary_key=True)
+    cost_minor: Mapped[int] = mapped_column(Integer)
+    # Сколько ингредиентов с количеством и сколько из них удалось оценить: покрытие оценки
+    ingredients_total: Mapped[int] = mapped_column(Integer)
+    ingredients_priced: Mapped[int] = mapped_column(Integer)
+    breakdown: Mapped[str | None] = mapped_column(Text)  # JSON: ингредиент, количество, товар, цена
+    computed_at: Mapped[datetime] = mapped_column(DateTime)
+
+    __table_args__ = (Index("ix_shop_recipe_costs_city", "city", "shop", "cost_minor"),)
+
+
+class QualityIssue(Base):
+    """Найденная проверкой качества проблема данных — food-scrape check перезаписывает целиком."""
+
+    __tablename__ = "shop_quality_issues"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    shop: Mapped[str] = mapped_column(SHOP)
+    city: Mapped[str | None] = mapped_column(CITY)
+    product_id: Mapped[str | None] = mapped_column(EXT_ID)
+    kind: Mapped[str] = mapped_column(String(32))
+    severity: Mapped[str] = mapped_column(String(16))  # warning | error
+    message: Mapped[str] = mapped_column(String(1024))
+    detected_at: Mapped[datetime] = mapped_column(DateTime)
+
+    __table_args__ = (Index("ix_shop_quality_issues_shop", "shop", "kind"),)

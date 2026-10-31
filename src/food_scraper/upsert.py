@@ -18,10 +18,26 @@ from .models import (
     ProductAttribute,
     ProductImage,
 )
+from .quantity import GRAM, Quantity, parse_pack
 from .shops.base import CategoryRow, DetailsRow, ItemRow
 from .stores import StoreRow
 
 BATCH = 500
+
+
+def item_pack(it: ItemRow) -> Quantity | None:
+    """Фасовка товара: из названия, иначе от магазина; у весовых цена за кг — фасовка 1000 g.
+
+    Название точнее: ВкусВилл отдаёт вес молока 900 мл как «0.9 кг», а в названии — «900 мл».
+    """
+    if it.is_weighted:
+        return Quantity(1000, GRAM)
+    pack = parse_pack(it.name)
+    if pack:
+        return pack
+    if it.net_quantity and it.net_unit:
+        return Quantity(float(it.net_quantity), it.net_unit)
+    return None
 # Поиск точек по координате у сетей нестабилен (у Магнита два обхода подряд — 123 и 124 точки):
 # точку выключаем, только если её не видно две недели.
 STORE_GONE_AFTER = timedelta(days=14)
@@ -89,15 +105,17 @@ async def save_items(
     # first_seen_at не перетираем: в update его нет. Категорию из листинга пишем, только если она есть —
     # иначе её задаёт карточка, и листинг не должен затирать её на NULL.
     def product_row(it: ItemRow) -> dict[str, Any]:
+        pack = item_pack(it)
         row = {
             "shop": shop, "id": it.id, "name": it.name[:1024], "url": it.url,
             "is_weighted": it.is_weighted, "is_adult": it.is_adult, "first_seen_at": now,
+            "net_quantity": pack.amount if pack else None, "net_unit": pack.unit if pack else None,
         }
         if it.category_id:
             row["category_id"] = it.category_id
         return row
 
-    product_cols = ["name", "url", "is_weighted", "is_adult"]
+    product_cols = ["name", "url", "is_weighted", "is_adult", "net_quantity", "net_unit"]
     with_category = [product_row(it) for it in items if it.category_id]
     without_category = [product_row(it) for it in items if not it.category_id]
     if without_category:

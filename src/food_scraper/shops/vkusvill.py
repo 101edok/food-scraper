@@ -216,6 +216,8 @@ def parse_item(it: dict[str, Any]) -> ItemRow | None:
     leaf = categories[0] if categories else {}
     parent = categories[1] if len(categories) > 1 else {}
     unit = (it.get("unit") or "").strip()
+    weight = it.get("weight") or {}
+    pack = _pack_from_weight(weight) if unit != "кг" else None
     images = [img.get("large") or img.get("medium") for img in it.get("images") or [] if isinstance(img, dict)]
     return ItemRow(
         id=str(it["id"]),
@@ -233,7 +235,21 @@ def parse_item(it: dict[str, Any]) -> ItemRow | None:
         category_name=leaf.get("name"),
         category_parent_id=str(parent["id"]) if parent.get("id") else None,
         category_parent_name=parent.get("name"),
+        net_quantity=pack[0] if pack else None,
+        net_unit=pack[1] if pack else None,
     )
+
+
+def _pack_from_weight(weight: dict[str, Any]) -> tuple[float, str] | None:
+    # API отдаёт вес в кг (у жидкостей тоже «кг» — 0.9 для 900 мл): переводим в граммы
+    try:
+        value = float(weight.get("value"))
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return {"кг": (round(value * 1000, 3), "g"), "л": (round(value * 1000, 3), "ml"),
+            "г": (value, "g"), "мл": (value, "ml")}.get(weight.get("unit"))
 
 
 _NUTRITION = re.compile(

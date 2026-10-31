@@ -152,6 +152,10 @@ class Price(Base):
         Index("ix_shop_prices_city_price", "shop", "city", "in_stock", "price_minor"),
         # Под внешний ключ на shop_products (см. миграцию 0002)
         Index("ix_shop_prices_product", "shop", "product_id"),
+        # Покрывающие под сводки админки (миграция 0004): по точке и по товару в городе
+        Index("ix_shop_prices_store", "shop", "store_code", "in_stock", "old_price_minor", "seen_at"),
+        Index("ix_shop_prices_city_product", "shop", "city", "product_id", "price_minor", "old_price_minor",
+              "in_stock", "seen_at", "store_code"),
     )
 
 
